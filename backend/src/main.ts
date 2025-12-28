@@ -6,7 +6,37 @@ async function bootstrap() {
 
   // Enable CORS for frontend communication
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+    origin: (origin, callback) => {
+      // Allow requests from localhost on common development ports
+      const defaultOrigins = [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
+      ];
+
+      // Add configured FRONTEND_URL if set
+      if (process.env.FRONTEND_URL) {
+        defaultOrigins.push(process.env.FRONTEND_URL);
+      }
+
+      // Add additional origins from ALLOWED_ORIGINS env var
+      if (process.env.ALLOWED_ORIGINS) {
+        const additionalOrigins = process.env.ALLOWED_ORIGINS.split(',').map(
+          (url) => url.trim(),
+        );
+        defaultOrigins.push(...additionalOrigins);
+      }
+
+      // Allow requests with no origin (mobile apps, etc.)
+      if (!origin) return callback(null, true);
+
+      if (defaultOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('Not allowed by CORS'), false);
+    },
     credentials: true,
   });
 
