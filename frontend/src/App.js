@@ -45,8 +45,8 @@ const App = () => {
 
   return (
     <Provider store={store}>
-      <AuthProvider>
-        <HashRouter>
+      <HashRouter>
+        <AuthProvider>
           <Suspense
             fallback={
               <div className="pt-3 text-center">
@@ -70,8 +70,8 @@ const App = () => {
               />
             </Routes>
           </Suspense>
-        </HashRouter>
-      </AuthProvider>
+        </AuthProvider>
+      </HashRouter>
     </Provider>
   )
 }
