@@ -39,12 +39,17 @@ class LLMService {
   }
 
   configureOpenAI(config) {
-    // Get API key - first try from environment (since backend config masks the key)
-    let apiKey = import.meta.env?.VITE_OPENAI_API_KEY
+    // Get API key from backend config (now includes actual key)
+    let apiKey = config.apiKey
+
+    if (!apiKey) {
+      // Fallback to environment variables if backend doesn't provide key
+      apiKey = import.meta.env?.VITE_OPENAI_API_KEY
+    }
 
     if (!apiKey) {
       throw new Error(
-        'OpenAI API key not found. Please set VITE_OPENAI_API_KEY in your frontend environment variables.',
+        'OpenAI API key not found. Please configure it in the backend provider settings.',
       )
     }
 

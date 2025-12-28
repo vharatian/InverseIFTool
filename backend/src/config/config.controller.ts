@@ -27,6 +27,7 @@ export class ConfigController {
     if (!config) {
       return { error: 'No active configuration found' };
     }
+    // Return full config with API key for frontend to use
     return config;
   }
 
