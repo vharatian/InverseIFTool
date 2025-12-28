@@ -40,43 +40,38 @@ export class ConfigController {
   }
 
   @Post()
-  createConfig(
-    @Body()
-    configData: Omit<LLMProviderConfig, 'id' | 'createdAt' | 'updatedAt'>,
-  ): LLMProviderConfig {
-    return this.configService.create(configData);
+  createConfig(): { error: string; message: string } {
+    return {
+      error: 'Configuration Read-Only',
+      message:
+        'LLM provider configuration is read from environment variables. Update your .env file to change settings.',
+    };
   }
 
   @Put(':id')
-  updateConfig(
-    @Param('id') id: string,
-    @Body() configData: Partial<Omit<LLMProviderConfig, 'id' | 'createdAt'>>,
-  ): LLMProviderConfig {
-    const updatedConfig = this.configService.update(id, configData);
-    if (!updatedConfig) {
-      throw new HttpException('Configuration not found', HttpStatus.NOT_FOUND);
-    }
-    return updatedConfig;
+  updateConfig(): { error: string; message: string } {
+    return {
+      error: 'Configuration Read-Only',
+      message:
+        'LLM provider configuration is read from environment variables. Update your .env file to change settings.',
+    };
   }
 
   @Put(':id/activate')
-  activateConfig(@Param('id') id: string): {
-    success: boolean;
-    message: string;
-  } {
-    const activated = this.configService.setActive(id);
-    if (!activated) {
-      throw new HttpException('Configuration not found', HttpStatus.NOT_FOUND);
-    }
-    return { success: true, message: 'Configuration activated successfully' };
+  activateConfig(): { error: string; message: string } {
+    return {
+      error: 'Configuration Read-Only',
+      message:
+        'LLM provider configuration is read from environment variables. Only one configuration is supported.',
+    };
   }
 
   @Delete(':id')
-  deleteConfig(@Param('id') id: string): { success: boolean; message: string } {
-    const deleted = this.configService.delete(id);
-    if (!deleted) {
-      throw new HttpException('Configuration not found', HttpStatus.NOT_FOUND);
-    }
-    return { success: true, message: 'Configuration deleted successfully' };
+  deleteConfig(): { error: string; message: string } {
+    return {
+      error: 'Configuration Read-Only',
+      message:
+        'LLM provider configuration is read from environment variables and cannot be deleted.',
+    };
   }
 }

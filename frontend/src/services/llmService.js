@@ -39,21 +39,12 @@ class LLMService {
   }
 
   configureOpenAI(config) {
-    // Get API key - first try from config, then from environment
-    let apiKey = config.apiKey
-
-    // If API key is masked (contains ***), try environment variables
-    if (!apiKey || apiKey.includes('***')) {
-      try {
-        apiKey = import.meta.env?.VITE_OPENAI_API_KEY
-      } catch {
-        apiKey = process?.env?.OPENAI_API_KEY
-      }
-    }
+    // Get API key - first try from environment (since backend config masks the key)
+    let apiKey = import.meta.env?.VITE_OPENAI_API_KEY
 
     if (!apiKey) {
       throw new Error(
-        'OpenAI API key not found. Please configure it in the provider settings or environment variables.',
+        'OpenAI API key not found. Please set VITE_OPENAI_API_KEY in your frontend environment variables.',
       )
     }
 

@@ -15,90 +15,78 @@ export interface LLMProviderConfig {
 
 @Injectable()
 export class ConfigService {
-  private configs: LLMProviderConfig[] = [];
+  private config: LLMProviderConfig;
 
-  // Initialize with default OpenAI config if no configs exist
-  private initializeDefaultConfig() {
-    if (this.configs.length === 0) {
-      const defaultConfig: LLMProviderConfig = {
-        id: 'default-openai',
-        name: 'Default OpenAI',
-        provider: 'openai',
-        apiKey: process.env.OPENAI_API_KEY || '',
-        baseUrl: 'https://api.openai.com/v1',
-        models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
-        defaultModel: 'gpt-4o-mini',
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      this.configs.push(defaultConfig);
-    }
+  constructor() {
+    // Initialize config from environment variables
+    this.config = this.loadConfigFromEnv();
   }
 
-  findAll(): LLMProviderConfig[] {
-    this.initializeDefaultConfig();
-    // Return configs without sensitive data
-    return this.configs.map((config) => ({
-      ...config,
-      apiKey: config.apiKey ? '***' + config.apiKey.slice(-4) : '',
-    }));
-  }
+  private loadConfigFromEnv(): LLMProviderConfig {
+    const provider = process.env.LLM_PROVIDER || 'openai';
+    const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
+    const baseUrl = process.env.LLM_BASE_URL || 'https://api.openai.com/v1';
+    const defaultModel = process.env.LLM_DEFAULT_MODEL || 'gpt-4o-mini';
+    const modelsString =
+      process.env.LLM_MODELS || 'gpt-4o-mini,gpt-4o,gpt-3.5-turbo';
+    const models = modelsString.split(',').map((model) => model.trim());
 
-  findOne(id: string): LLMProviderConfig | undefined {
-    this.initializeDefaultConfig();
-    return this.configs.find((config) => config.id === id);
-  }
-
-  findActive(): LLMProviderConfig | undefined {
-    this.initializeDefaultConfig();
-    return this.configs.find((config) => config.isActive);
-  }
-
-  create(
-    configData: Omit<LLMProviderConfig, 'id' | 'createdAt' | 'updatedAt'>,
-  ): LLMProviderConfig {
-    const config: LLMProviderConfig = {
-      id: Date.now().toString(),
-      ...configData,
+    return {
+      id: 'env-config',
+      name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} Provider`,
+      provider: provider as 'openai' | 'anthropic' | 'google' | 'custom',
+      apiKey,
+      baseUrl,
+      models,
+      defaultModel,
+      isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    this.configs.push(config);
-    return config;
+  }
+
+  findAll(): LLMProviderConfig[] {
+    // Return config without sensitive API key data
+    return [
+      {
+        ...this.config,
+        apiKey: this.config.apiKey ? '***' + this.config.apiKey.slice(-4) : '',
+      },
+    ];
+  }
+
+  findOne(id: string): LLMProviderConfig | undefined {
+    return id === 'env-config' ? { ...this.config } : undefined;
+  }
+
+  findActive(): LLMProviderConfig | undefined {
+    return { ...this.config };
+  }
+
+  // These methods are no-ops since config is read-only from env
+  create(
+    configData: Omit<LLMProviderConfig, 'id' | 'createdAt' | 'updatedAt'>,
+  ): LLMProviderConfig {
+    throw new Error('Configuration is read-only from environment variables');
   }
 
   update(
     id: string,
     configData: Partial<Omit<LLMProviderConfig, 'id' | 'createdAt'>>,
   ): LLMProviderConfig | null {
-    const configIndex = this.configs.findIndex((config) => config.id === id);
-    if (configIndex === -1) return null;
-
-    this.configs[configIndex] = {
-      ...this.configs[configIndex],
-      ...configData,
-      updatedAt: new Date(),
-    };
-    return this.configs[configIndex];
+    throw new Error('Configuration is read-only from environment variables');
   }
 
   delete(id: string): boolean {
-    const configIndex = this.configs.findIndex((config) => config.id === id);
-    if (configIndex === -1) return false;
-
-    this.configs.splice(configIndex, 1);
-    return true;
+    throw new Error('Configuration is read-only from environment variables');
   }
 
   setActive(id: string): boolean {
-    const config = this.configs.find((c) => c.id === id);
-    if (!config) return false;
+    throw new Error('Configuration is read-only from environment variables');
+  }
 
-    // Set all configs to inactive, then activate the selected one
-    this.configs.forEach((c) => (c.isActive = false));
-    config.isActive = true;
-    config.updatedAt = new Date();
-    return true;
+  // Method to reload config from environment (useful for testing)
+  reloadConfig(): void {
+    this.config = this.loadConfigFromEnv();
   }
 }
