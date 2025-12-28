@@ -5,13 +5,7 @@ class OpenAIClient {
     // Get API key from environment variables
     let apiKey = config.apiKey
     if (!apiKey) {
-      try {
-        // Try Vite environment variables first (client-side)
-        apiKey = import.meta.env?.VITE_OPENAI_API_KEY
-      } catch {
-        // Fallback to Node.js environment variables (server-side)
-        apiKey = process?.env?.OPENAI_API_KEY
-      }
+      throw ("no apikey fount")
     }
 
     this.client = new OpenAI({
@@ -19,6 +13,7 @@ class OpenAIClient {
       organization: config.organization,
       project: config.project,
       ...config.clientOptions,
+      dangerouslyAllowBrowser: true
     })
 
     this.defaultOptions = {
@@ -63,6 +58,7 @@ class OpenAIClient {
         apiKey: config.apiKey,
         organization: config.organization || this.client.organization,
         project: config.project || this.client.project,
+        dangerouslyAllowBrowser: true,
       })
     }
 

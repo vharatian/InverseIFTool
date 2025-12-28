@@ -43,11 +43,6 @@ class LLMService {
     let apiKey = config.apiKey
 
     if (!apiKey) {
-      // Fallback to environment variables if backend doesn't provide key
-      apiKey = import.meta.env?.VITE_OPENAI_API_KEY
-    }
-
-    if (!apiKey) {
       throw new Error(
         'OpenAI API key not found. Please configure it in the backend provider settings.',
       )
@@ -56,6 +51,7 @@ class LLMService {
     this.client = new OpenAI({
       apiKey,
       baseURL: config.baseUrl || 'https://api.openai.com/v1',
+      dangerouslyAllowBrowser: true,
     })
 
     this.providerType = 'openai'
@@ -95,6 +91,46 @@ class LLMService {
           content: prompt,
         },
       ],
+    }
+
+    try {
+      let response
+
+      switch (this.providerType) {
+        case 'openai':
+          const completion = await this.client.chat.completions.create(completionOptions)
+          response = completion.choices[0]?.message?.content || ''
+          break
+        default:
+          throw new Error(`Provider ${this.providerType} not implemented`)
+      }
+
+      return response
+    } catch (error) {
+      console.error('LLM Service Error:', error)
+      throw new Error(`Failed to get LLM response: ${error.message}`)
+    }
+  }
+
+  /**
+   * Generate a response using the configured LLM provider with messages
+   * @param {Array} messages - Array of message objects with role and content
+   * @param {Object} options - Additional options for the request
+   * @returns {Promise<string>} - The LLM response
+   */
+  async generateResponseWithMessages(messages, options = {}) {
+    if (!this.client) {
+      throw new Error('LLM provider not configured. Please call configureProvider() first.')
+    }
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      throw new Error('Messages array is required and must not be empty')
+    }
+
+    const completionOptions = {
+      ...this.defaultOptions,
+      ...options,
+      messages,
     }
 
     try {

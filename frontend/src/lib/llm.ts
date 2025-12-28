@@ -33,8 +33,9 @@ export async function getChatCompletion(
   }
 
   const client = new OpenAI({
-    apiKey: (import.meta.env?.VITE_OPENAI_API_KEY as string) || options.provider?.apiKey,
-    baseURL: (import.meta.env?.VITE_OPENAI_BASE_URL as string) || options.provider?.baseUrl,
+    apiKey: options.provider?.apiKey,
+    baseURL: options.provider?.baseUrl,
+    dangerouslyAllowBrowser: true,
   })
 
   const completionOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
@@ -86,9 +87,11 @@ export async function getChatCompletionWithMessages(
   }
 
   const client = new OpenAI({
-    apiKey: (import.meta.env?.VITE_OPENAI_API_KEY as string) || options.apiKey,
+    apiKey: options.apiKey,
     organization: options.organization,
     project: options.project,
+    baseURL: options.baseUrl,
+    dangerouslyAllowBrowser: true,
   })
 
   const completionOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
