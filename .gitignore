@@ -7,6 +7,8 @@ pnpm-lock.yaml
 # Production builds
 build/
 dist/
+**/dist/
+**/build/
 .next/
 .nuxt/
 .output/
