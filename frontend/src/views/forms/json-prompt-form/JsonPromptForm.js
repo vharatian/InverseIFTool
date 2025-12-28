@@ -12,8 +12,7 @@ import {
   CAlert,
 } from '@coreui/react'
 import JsonArrayTextarea from 'src/components/JsonArrayTextarea'
-import { llmCall } from '../../../../lib/llm-call.js'
-import { configApi } from '../../../services/api'
+import { configApi, llmService } from '../../../services'
 
 const JsonPromptForm = () => {
   const [criteriaJson, setCriteriaJson] = useState('')
@@ -29,16 +28,37 @@ const JsonPromptForm = () => {
     const fetchConfig = async () => {
       try {
         const response = await configApi.getActive()
-        setLlmConfig(response.data)
-        console.log('Fetched LLM config:', response.data)
+        const config = response.data
+        setLlmConfig(config)
+
+        // Configure the LLM service with the fetched config
+        try {
+          llmService.configureProvider(config)
+          console.log('LLM service configured with:', config)
+        } catch (configError) {
+          console.error('Failed to configure LLM service:', configError.message)
+          setSubmitMessage(`Configuration Error: ${configError.message}`)
+        }
+
+        console.log('Fetched LLM config:', config)
       } catch (error) {
         console.warn('Could not fetch LLM config from backend:', error.message)
         // Fall back to client-side environment variables
-        setLlmConfig({
+        const fallbackConfig = {
           provider: 'openai',
           defaultModel: 'gpt-4o-mini',
           baseUrl: import.meta.env?.VITE_OPENAI_BASE_URL,
-        })
+          apiKey: import.meta.env?.VITE_OPENAI_API_KEY,
+        }
+
+        setLlmConfig(fallbackConfig)
+
+        try {
+          llmService.configureProvider(fallbackConfig)
+          console.log('LLM service configured with fallback config')
+        } catch (configError) {
+          console.error('Failed to configure LLM service with fallback:', configError.message)
+        }
       } finally {
         setConfigLoading(false)
       }
@@ -82,8 +102,13 @@ const JsonPromptForm = () => {
 
       console.log('Calling LLM with:', { criteria: validatedJson, prompt, enhancedPrompt })
 
-      // Call the LLM
-      const response = await llmCall({}, enhancedPrompt)
+      // Check if LLM service is configured
+      if (!llmService.isConfigured()) {
+        throw new Error('LLM service is not configured. Please check your provider settings.')
+      }
+
+      // Call the LLM using the configured service
+      const response = await llmService.generateResponse(enhancedPrompt, {})
 
       setSubmitMessage(`LLM Response: ${response}`)
     } catch (error) {
