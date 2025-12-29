@@ -2,7 +2,7 @@ FROM node:20-alpine as build
 
 WORKDIR /app
 
-COPY package*.json yarn.lock ./
+COPY package*.json ./
 RUN npm install -g vite && yarn install
 
 COPY . .
