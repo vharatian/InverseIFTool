@@ -7,6 +7,7 @@ import { ConfigModule } from './config/config.module';
 import { AuthModule } from './auth/auth.module';
 import { SeedService } from './seeders/seed.service';
 import { User } from './users/user.entity';
+import { LlmModule } from './llm/llm.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { User } from './users/user.entity';
     UsersModule,
     ConfigModule,
     AuthModule,
+    LlmModule,
   ],
   controllers: [AppController],
   providers: [AppService, SeedService],

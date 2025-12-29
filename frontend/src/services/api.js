@@ -76,4 +76,12 @@ export const configApi = {
   delete: (id) => api.delete(`/config/${id}`),
 }
 
+// LLM API
+export const llmApi = {
+  generateResponse: (prompt, options) =>
+    api.post('/llm/generate', { prompt, options }),
+  generateResponseWithMessages: (messages, options) =>
+    api.post('/llm/generate-with-messages', { messages, options }),
+}
+
 export default api

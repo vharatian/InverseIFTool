@@ -1,13 +1,30 @@
 import { useState, useEffect } from 'react'
-import { configApi, llmService } from '../services'
+import { configApi, llmApi } from '../services'
+import { cib500px } from '@coreui/icons'
+import { sleep } from '../utils/tools'
+import { parseEvaluation } from '../utils/parser'
+
+const TEST_MODEL_OPTIONS = {
+  model: 'fireworks/qwen3-coder-480b-a35b-instruct',
+  temperature: 1,
+  top_p: 1,
+}
+const JUDGE_MODEL = {
+  model: 'fireworks/qwen3-coder-480b-a35b-instruct',
+  temperature: 0,
+  top_p: 0,
+}
 
 const useLLM = () => {
   const [llmConfig, setLlmConfig] = useState(null)
   const [configLoading, setConfigLoading] = useState(true)
-  const [llmResponse, setLLMResponse] = useState(null)
+  const [modelResponses, setModelResponses] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState('')
-  const [judgeResponse, setJudgeResponse] = useState([])
+  const [judgeTextResponses, setJudgeTextResponses] = useState([])
+  const [judgeParseResponses, setJudgeParsedResponses] = useState([])
+  const [attempts, setAttempts] = useState(0)
+  const [wins, setWins] = useState(0)
 
   // Fetch LLM configuration from backend on hook initialization
   useEffect(() => {
@@ -16,16 +33,6 @@ const useLLM = () => {
         const response = await configApi.getActive()
         const config = response.data
         setLlmConfig(config)
-
-        // Configure the LLM service with the fetched config
-        try {
-          llmService.configureProvider(config)
-          console.log('LLM service configured with:', config)
-        } catch (configError) {
-          console.error('Failed to configure LLM service:', configError.message)
-          setSubmitMessage(`Configuration Error: ${configError.message}`)
-        }
-
         console.log('Fetched LLM config:', config)
       } catch (error) {
         console.warn('Could not fetch LLM config from backend:', error.message)
@@ -36,15 +43,7 @@ const useLLM = () => {
           baseUrl: undefined,
           apiKey: '',
         }
-
         setLlmConfig(fallbackConfig)
-
-        try {
-          llmService.configureProvider(fallbackConfig)
-          console.log('LLM service configured with fallback config')
-        } catch (configError) {
-          console.error('Failed to configure LLM service with fallback:', configError.message)
-        }
       } finally {
         setConfigLoading(false)
       }
@@ -53,7 +52,12 @@ const useLLM = () => {
     fetchConfig()
   }, [])
 
-  const submitPrompt = async (prompt) => {
+  const addManualResponse = async (prompt, response, validatedJson) => {
+    setModelResponses(prev => [response, ...prev])
+    await evaluate(validatedJson, prompt, response)
+  }
+
+  const runTestModel = async (prompt, criteria) => {
     if (!prompt.trim()) {
       setSubmitMessage('Please provide a prompt')
       return
@@ -63,28 +67,28 @@ const useLLM = () => {
     setSubmitMessage('')
 
     try {
-
       console.log('Calling LLM with: \n', prompt)
 
-      // Check if LLM service is configured
-      if (!llmService.isConfigured()) {
-        throw new Error('LLM service is not configured. Please check your provider settings.')
-      }
+      // Call the LLM using the backend API
+      const response = await llmApi.generateResponse(prompt, TEST_MODEL_OPTIONS)
+      const llmResponse = response.data.response
 
-      // Call the LLM using the configured service
-      const response = await llmService.generateResponse(prompt, {})
-
-      setSubmitMessage(`LLM Response: ${response}`)
-      setLLMResponse(response)
+      setSubmitMessage(`LLM Response: ${llmResponse}`)
+      setModelResponses((responses) => {
+        return [...responses, llmResponse]
+      })
+      const res = await evaluate(criteria, prompt, llmResponse)
+      return res
     } catch (error) {
       console.error('LLM call failed:', error)
       setSubmitMessage(`Error: ${error.message}`)
+      return null
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const submitJudgeEvaluation = async (validatedJson, prompt, llmResponse, maxTry = 20) => {
+  const evaluate = async (validatedJson, prompt, llmResponse) => {
     if (!validatedJson) {
       setSubmitMessage('Please provide valid JSON criteria array')
       return
@@ -95,22 +99,10 @@ const useLLM = () => {
       return
     }
 
-    if (maxTry < 1 || maxTry > 100) {
-      setSubmitMessage('Max try must be between 1 and 100')
-      return
-    }
-
     setIsSubmitting(true)
     setSubmitMessage('Starting evaluation...')
 
-    try {
-      let failedAttempts = 0
-      let attempts = 0
-      let lastJudgeResponse = ''
-
-
-      // Judge system prompt
-      const judgeSystemPrompt = `You are acting as a strict grading evaluator. Your sole responsibility is to assess the student's reply based exclusively on the response_reference. You must disregard intent, effort, or external knowledge. Literal compliance is the only metric for success.
+    const judgeSystemPrompt = `You are acting as a strict grading evaluator. Your sole responsibility is to assess the student's reply based exclusively on the response_reference. You must disregard intent, effort, or external knowledge. Literal compliance is the only metric for success.
 
 STANDARD EVALUATION CRITERIA
 
@@ -212,7 +204,7 @@ Tools
 
 [JSON]: {"answer_score": 1}
 
-[Explanation]: All criteria are satisfied. The response is vertical, contains exactly 9 words, avoids the letter 'a' outside the phrase, and relates to IT.
+[Explanation]: All criteria satisfied. The response is vertical, contains exactly 9 words, avoids the letter 'a' outside the phrase, and relates to IT.
 
 Example 2: Incorrect (0 points - Multiple Failures)
 
@@ -296,90 +288,78 @@ CLOSING STATEMENT
 
 Remember, you must be very strict when grading the student's answer. Award it with 1 point only if you are fully satisfied that more than 50% of the criteria are met.`
 
-      // Check if LLM service is configured
-      if (!llmService.isConfigured()) {
-        throw new Error('LLM service is not configured. Please check your provider settings.')
-      }
-
-      // Run evaluations until success or max tries reached
-      while (attempts < maxTry && failedAttempts < 4) {
-        attempts++
-        setSubmitMessage(`Running evaluation attempt ${attempts}/${maxTry}...`)
-
-        try {
-          // Fill the judge prompt template
-          const responseReference = `Each criterion is evaluated independently as PASS or FAIL.
+    try {
+      // Fill the judge prompt template
+      const responseReference = `Each criterion is evaluated independently as PASS or FAIL.
 
 ${JSON.stringify(validatedJson)}
 
 Failure to PASS more than 50% of the above criteria will result in a score of 0 points.
 `
 
-          const judgePrompt = `${prompt}
+      const judgePrompt = `${prompt}
 
 ${responseReference}
 
 ${llmResponse}
 `
 
-          console.log(`Judge evaluation attempt ${attempts}:`, {
-            criteria: validatedJson,
-            originalPrompt: prompt,
-            llmResponse: llmResponse,
-            judgePrompt: judgePrompt,
-          })
+      console.log(`Judge evaluation `, {
+        criteria: validatedJson,
+        originalPrompt: prompt,
+        llmResponse: llmResponse,
+        judgePrompt: judgePrompt,
+      })
 
-          // Create messages array for the judge
-          const messages = [
-            {
-              role: 'system',
-              content: judgeSystemPrompt,
-            },
-            {
-              role: 'user',
-              content: judgePrompt,
-            },
-          ]
+      // Create messages array for the judge
+      const messages = [
+        {
+          role: 'system',
+          content: judgeSystemPrompt,
+        },
+        {
+          role: 'user',
+          content: judgePrompt,
+        },
+      ]
 
-          // Call the LLM using the configured service with messages
-          const judgeResponse = await llmService.generateResponseWithMessages(messages, {})
-          lastJudgeResponse = judgeResponse
+      // Call the LLM using the backend API with messages
+      const response = await llmApi.generateResponseWithMessages(messages, JUDGE_MODEL)
+      console.log("llm rsponse", response)
+      const judgeResponse = response.data.response
+      setJudgeTextResponses(r => [...r, judgeResponse])
+      const e = parseEvaluation(judgeResponse)
+      console.log("extracted", e)
+      setJudgeParsedResponses(r => [...r, e])
+      return e.score == 0
 
-          // Parse the score from the judge response
-          const scoreMatch = judgeResponse.match(/\[JSON\]:\s*\{\s*"answer_score":\s*(\d+)\s*\}/)
-          if (scoreMatch) {
-            const finalScore = parseInt(scoreMatch[1], 10)
-            console.log(`Attempt ${attempts}: Score = ${finalScore}`)
-
-            if (finalScore < 1) {
-              failedAttempts++
-            }
-          } else {
-            console.warn(`Attempt ${attempts}: Could not parse score from response`)
-          }
-
-          // Small delay between attempts to avoid rate limiting
-          if (attempts < maxTry && failedAttempts < 4) {
-            await new Promise((resolve) => setTimeout(resolve, 500))
-          }
-        } catch (error) {
-          console.error(`Judge evaluation attempt ${attempts} failed:`, error)
-          // Continue to next attempt
-        }
-      }
-
-      // Final result
-      const finalMessage =
-        failedAttempts >= 4
-          ? `✅ SUCCESS: Achieved score ${failedAttempts} in ${attempts} attempt(s)\n\n${lastJudgeResponse}`
-          : `❌ FAILED: Could not achieve passing score after ${attempts} attempt(s) (max: ${maxTry})\n\nLast evaluation:\n${lastJudgeResponse}`
-
-      setSubmitMessage(finalMessage)
     } catch (error) {
       console.error('Judge evaluation failed:', error)
       setSubmitMessage(`Error: ${error.message}`)
     } finally {
       setIsSubmitting(false)
+    }
+    return null
+  }
+
+  const batch = async (prompt, criteria, maxTry = 10, goal = 4) => {
+    setAttempts(0)
+    setWins(0)
+    let localWin = 0
+    let localAttempts = 0
+    console.log("run batch", maxTry, goal)
+    while (localAttempts < maxTry && localWin < goal) {
+      try {
+        const res = await runTestModel(prompt, criteria)
+        localAttempts++
+        if (res) {
+          localWin++
+        }
+        setAttempts((prev) => prev++)
+        await sleep(500)
+      } catch (e) {
+        await sleep(500)
+      }
     }
   }
 
@@ -387,14 +367,19 @@ ${llmResponse}
     // State
     llmConfig,
     configLoading,
-    llmResponse,
+    modelResponses,
+    judgeParseResponses,
+    judgeTextResponses,
+    wins,
+    attempts,
     isSubmitting,
     submitMessage,
 
+
     // Actions
-    submitPrompt,
-    submitJudgeEvaluation,
     setSubmitMessage,
+    batch,
+    addManualResponse,
   }
 }
 
