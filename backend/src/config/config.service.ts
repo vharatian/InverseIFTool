@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 export interface LLMProviderConfig {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'google' | 'fireworks' | 'custom';
+  provider: 'openai' | 'anthropic' | 'google' | 'fireworks' | 'custom' | 'openrouter';
   apiKey: string;
   baseUrl?: string;
   models: string[];
@@ -69,7 +69,7 @@ export class ConfigService {
     return {
       id: `${prov}-config`,
       name: `${prov.charAt(0).toUpperCase() + prov.slice(1)} Provider`,
-      provider: prov as 'openai' | 'anthropic' | 'google' | 'custom',
+      provider: prov as 'openai' | 'anthropic' | 'google' | 'custom' | 'openrouter',
       apiKey,
       baseUrl,
       models,
@@ -88,7 +88,7 @@ export class ConfigService {
     }));
   }
 
-   findOne(id: string): LLMProviderConfig | undefined {
+  findOne(id: string): LLMProviderConfig | undefined {
     return this.configs.find(config => config.id === id);
   }
 
