@@ -14,6 +14,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { useAuth } from '../../contexts/AuthContext'
+import { api } from '../../services/api'
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -29,19 +30,8 @@ const Login = () => {
     setError('')
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Login failed')
-      }
-
-      const data = await response.json()
+      const response = await api.post('/auth/login', { email, password })
+      const data = response.data
 
       if (data.access_token && data.user) {
         login(data.access_token, data.user)

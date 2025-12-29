@@ -14,6 +14,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { useAuth } from '../../contexts/AuthContext'
+import { api } from '../../services/api'
 
 const Register = () => {
   const [email, setEmail] = useState('')
@@ -37,20 +38,8 @@ const Register = () => {
     setIsLoading(true)
 
     try {
-      // TODO: Replace with actual API call
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, name, password }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Registration failed')
-      }
-
-      const data = await response.json()
+      const response = await api.post('/auth/register', { name, email, password })
+      const data = response.data
 
       if (data.access_token && data.user) {
         register(data.access_token, data.user)
