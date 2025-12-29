@@ -8,6 +8,7 @@ import {
   CForm,
   CFormTextarea,
   CFormLabel,
+  CFormSelect,
   CRow,
   CAlert,
   CAccordion, CAccordionBody, CAccordionHeader, CAccordionItem, CBadge,
@@ -22,11 +23,15 @@ const JsonPromptForm = () => {
   const [prompt, setPrompt] = useState('')
   const [validatedJson, setValidatedJson] = useState(null)
   const [maxTry, setMaxTry] = useState(20)
+  const [judgeProvider, setJudgeProvider] = useState('')
+  const [judgeModel, setJudgeModel] = useState('')
+  const [testProvider, setTestProvider] = useState('')
+  const [testModel, setTestModel] = useState('')
 
   // Use the LLM hook for all LLM-related functionality
   const {
     // State
-    llmConfig,
+    llmConfigs,
     configLoading,
     modelResponses,
     judgeParseResponses,
@@ -51,18 +56,29 @@ const JsonPromptForm = () => {
     console.log(event)
     const action = event.nativeEvent.submitter.value
     if (action === "run") {
-      await batch(prompt, validatedJson, maxTry)
+      await batch(prompt, validatedJson, maxTry, 4, testProvider, testModel, judgeProvider, judgeModel)
     }
     if (action === "test") {
-      await addManualResponse(prompt, idealResponse, validatedJson)
+      await addManualResponse(prompt, idealResponse, validatedJson, judgeProvider, judgeModel)
     }
   }
 
   useEffect(() => {
     console.log("model responses changed", modelResponses)
-
     console.log("model responses changed", judgeParseResponses)
   }, [modelResponses, judgeParseResponses])
+
+  useEffect(() => {
+    if (llmConfigs && llmConfigs.length > 0) {
+      const activeConfig = llmConfigs.find(c => c.isActive) || llmConfigs[0]
+      if (activeConfig) {
+        if (!testProvider) setTestProvider(activeConfig.provider)
+        if (!judgeProvider) setJudgeProvider(activeConfig.provider)
+        if (!testModel && testProvider === activeConfig.provider) setTestModel(activeConfig.defaultModel)
+        if (!judgeModel && judgeProvider === activeConfig.provider) setJudgeModel(activeConfig.defaultModel)
+      }
+    }
+  }, [llmConfigs, testProvider, testModel, judgeProvider, judgeModel])
 
   return (
     <>
@@ -73,9 +89,9 @@ const JsonPromptForm = () => {
             <CAlert color="info" className="mb-3">
               Loading LLM configuration...
             </CAlert>
-          ) : llmConfig ? (
+          ) : llmConfigs && llmConfigs.length > 0 ? (
             <CAlert color="success" className="mb-3">
-              Connected to {llmConfig.provider} ({llmConfig.defaultModel || 'default model'})
+              Connected to {llmConfigs.length} LLM provider(s)
             </CAlert>
           ) : (
             <CAlert color="warning" className="mb-3">
@@ -104,6 +120,86 @@ const JsonPromptForm = () => {
             </CCardHeader>
             <CCardBody>
               <CForm onSubmit={handleSubmit}>
+                <CRow>
+                  <CCol md={3}>
+                    <div className="mb-3">
+                      <CFormLabel htmlFor="testProviderSelect">Test Provider</CFormLabel>
+                      <CFormSelect
+                        id="testProviderSelect"
+                        value={testProvider}
+                        onChange={(e) => {
+                          setTestProvider(e.target.value)
+                          setTestModel('')
+                        }}
+                        disabled={configLoading}
+                      >
+                        <option value="">Select Provider</option>
+                        {llmConfigs?.map((config) => (
+                          <option key={config.provider} value={config.provider}>
+                            {config.provider}
+                          </option>
+                        ))}
+                      </CFormSelect>
+                    </div>
+                  </CCol>
+                  <CCol md={3}>
+                    <div className="mb-3">
+                      <CFormLabel htmlFor="testModelSelect">Test Model</CFormLabel>
+                      <CFormSelect
+                        id="testModelSelect"
+                        value={testModel}
+                        onChange={(e) => setTestModel(e.target.value)}
+                        disabled={configLoading || !testProvider}
+                      >
+                        <option value="">Select Model</option>
+                        {llmConfigs?.find(c => c.provider === testProvider)?.models.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </CFormSelect>
+                    </div>
+                  </CCol>
+                  <CCol md={3}>
+                    <div className="mb-3">
+                      <CFormLabel htmlFor="judgeProviderSelect">Judge Provider</CFormLabel>
+                      <CFormSelect
+                        id="judgeProviderSelect"
+                        value={judgeProvider}
+                        onChange={(e) => {
+                          setJudgeProvider(e.target.value)
+                          setJudgeModel('')
+                        }}
+                        disabled={configLoading}
+                      >
+                        <option value="">Select Provider</option>
+                        {llmConfigs?.map((config) => (
+                          <option key={config.provider} value={config.provider}>
+                            {config.provider}
+                          </option>
+                        ))}
+                      </CFormSelect>
+                    </div>
+                  </CCol>
+                  <CCol md={3}>
+                    <div className="mb-3">
+                      <CFormLabel htmlFor="judgeModelSelect">Judge Model</CFormLabel>
+                      <CFormSelect
+                        id="judgeModelSelect"
+                        value={judgeModel}
+                        onChange={(e) => setJudgeModel(e.target.value)}
+                        disabled={configLoading || !judgeProvider}
+                      >
+                        <option value="">Select Model</option>
+                        {llmConfigs?.find(c => c.provider === judgeProvider)?.models.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </CFormSelect>
+                    </div>
+                  </CCol>
+                </CRow>
                 <div className="mb-3">
                   <CFormLabel htmlFor="promptTextarea">Prompt</CFormLabel>
                   <CFormTextarea

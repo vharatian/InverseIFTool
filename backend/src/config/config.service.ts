@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 export interface LLMProviderConfig {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'google' | 'custom';
+  provider: 'openai' | 'anthropic' | 'google' | 'fireworks' | 'custom';
   apiKey: string;
   baseUrl?: string;
   models: string[];
@@ -15,26 +15,61 @@ export interface LLMProviderConfig {
 
 @Injectable()
 export class ConfigService {
-  private config: LLMProviderConfig;
+  private configs: LLMProviderConfig[] = [];
 
   constructor() {
-    // Initialize config from environment variables
-    this.config = this.loadConfigFromEnv();
+    // Initialize configs from environment variables
+    this.configs = this.loadConfigsFromEnv();
   }
 
-  private loadConfigFromEnv(): LLMProviderConfig {
-    const provider = process.env.LLM_PROVIDER || 'openai';
-    const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
-    const baseUrl = process.env.LLM_BASE_URL || 'https://api.openai.com/v1';
-    const defaultModel = process.env.LLM_DEFAULT_MODEL || 'gpt-4o-mini';
-    const modelsString =
-      process.env.LLM_MODELS || 'gpt-4o-mini,gpt-4o,gpt-3.5-turbo';
+  private loadConfigsFromEnv(): LLMProviderConfig[] {
+    const configs: LLMProviderConfig[] = [];
+
+    // Load configs from LLM_PROVIDERS list
+    const providersString = process.env.LLM_PROVIDERS || 'openai';
+    const providers = providersString.split(',').map(p => p.trim());
+
+    for (const provider of providers) {
+      const config = this.loadConfigFromEnv(provider);
+      if (config) {
+        configs.push(config);
+      }
+    }
+
+    // If no configs loaded, load default
+    if (configs.length === 0) {
+      const defaultConfig = this.loadConfigFromEnv();
+      if (defaultConfig) {
+        configs.push(defaultConfig);
+      }
+    }
+
+    return configs;
+  }
+
+  private loadConfigFromEnv(provider?: string): LLMProviderConfig | null {
+    const prov = provider || process.env.LLM_PROVIDER || 'openai';
+    const prefix = provider ? `LLM_${prov.toUpperCase()}` : 'LLM';
+    const apiKeyEnv = provider ? `${prefix}_API_KEY` : 'LLM_API_KEY';
+    const baseUrlEnv = `${prefix}_BASE_URL`;
+    const defaultModelEnv = `${prefix}_DEFAULT_MODEL`;
+    const modelsEnv = `${prefix}_MODELS`;
+
+    const apiKey = process.env[apiKeyEnv] || (prov === 'openai' ? process.env.OPENAI_API_KEY : '') || '';
+    if (!apiKey) {
+      console.warn(`No API key found for provider ${prov}`);
+      return null;
+    }
+
+    const baseUrl = process.env[baseUrlEnv] || (prov === 'openai' ? 'https://api.openai.com/v1' : '');
+    const defaultModel = process.env[defaultModelEnv] || (prov === 'openai' ? 'gpt-4o-mini' : '');
+    const modelsString = process.env[modelsEnv] || (prov === 'openai' ? 'gpt-4o-mini,gpt-4o,gpt-3.5-turbo' : '');
     const models = modelsString.split(',').map((model) => model.trim());
 
     return {
-      id: 'env-config',
-      name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} Provider`,
-      provider: provider as 'openai' | 'anthropic' | 'google' | 'custom',
+      id: `${prov}-config`,
+      name: `${prov.charAt(0).toUpperCase() + prov.slice(1)} Provider`,
+      provider: prov as 'openai' | 'anthropic' | 'google' | 'custom',
       apiKey,
       baseUrl,
       models,
@@ -46,21 +81,35 @@ export class ConfigService {
   }
 
   findAll(): LLMProviderConfig[] {
-    // Return config without sensitive API key data
-    return [
-      {
-        ...this.config,
-        apiKey: this.config.apiKey ? '***' + this.config.apiKey.slice(-4) : '',
-      },
-    ];
+    // Return configs without sensitive API key data
+    return this.configs.map(config => ({
+      ...config,
+      apiKey: config.apiKey ? '***' + config.apiKey.slice(-4) : '',
+    }));
   }
 
-  findOne(id: string): LLMProviderConfig | undefined {
-    return id === 'env-config' ? { ...this.config } : undefined;
+   findOne(id: string): LLMProviderConfig | undefined {
+    return this.configs.find(config => config.id === id);
   }
 
   findActive(): LLMProviderConfig | undefined {
-    return { ...this.config };
+    return this.configs.find(config => config.isActive) || this.configs[0];
+  }
+
+  findProviderForModel(model: string): LLMProviderConfig | undefined {
+    return this.configs.find(config => config.models.includes(model));
+  }
+
+  getFullAll(): LLMProviderConfig[] {
+    return this.configs;
+  }
+
+  getAllModels(): string[] {
+    const allModels: string[] = [];
+    for (const config of this.configs) {
+      allModels.push(...config.models);
+    }
+    return [...new Set(allModels)]; // Remove duplicates
   }
 
   // These methods are no-ops since config is read-only from env
@@ -85,8 +134,8 @@ export class ConfigService {
     throw new Error('Configuration is read-only from environment variables');
   }
 
-  // Method to reload config from environment (useful for testing)
+  // Method to reload configs from environment (useful for testing)
   reloadConfig(): void {
-    this.config = this.loadConfigFromEnv();
+    this.configs = this.loadConfigsFromEnv();
   }
 }

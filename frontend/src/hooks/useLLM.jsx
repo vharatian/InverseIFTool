@@ -5,18 +5,16 @@ import { sleep } from '../utils/tools'
 import { parseEvaluation } from '../utils/parser'
 
 const TEST_MODEL_OPTIONS = {
-  model: 'fireworks/qwen3-coder-480b-a35b-instruct',
   temperature: 1,
   top_p: 1,
 }
 const JUDGE_MODEL = {
-  model: 'fireworks/qwen3-coder-480b-a35b-instruct',
   temperature: 0,
   top_p: 0,
 }
 
 const useLLM = () => {
-  const [llmConfig, setLlmConfig] = useState(null)
+  const [llmConfigs, setLlmConfigs] = useState([])
   const [configLoading, setConfigLoading] = useState(true)
   const [modelResponses, setModelResponses] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -26,38 +24,40 @@ const useLLM = () => {
   const [attempts, setAttempts] = useState(0)
   const [wins, setWins] = useState(0)
 
-  // Fetch LLM configuration from backend on hook initialization
+  // Fetch LLM configurations from backend on hook initialization
   useEffect(() => {
-    const fetchConfig = async () => {
+    const fetchConfigs = async () => {
       try {
-        const response = await configApi.getActive()
-        const config = response.data
-        setLlmConfig(config)
-        console.log('Fetched LLM config:', config)
+        const response = await configApi.getAll()
+        const configs = response.data
+        setLlmConfigs(configs)
+        console.log('Fetched LLM configs:', configs)
       } catch (error) {
-        console.warn('Could not fetch LLM config from backend:', error.message)
+        console.warn('Could not fetch LLM configs from backend:', error.message)
         // Fall back to client-side environment variables
-        const fallbackConfig = {
+        const fallbackConfigs = [{
           provider: 'openai',
           defaultModel: 'gpt-4o-mini',
-          baseUrl: undefined,
-          apiKey: '',
-        }
-        setLlmConfig(fallbackConfig)
+          models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
+          isActive: true,
+        }]
+        setLlmConfigs(fallbackConfigs)
+        setConfigLoading(false)
+        setAvailableModels(['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'])
       } finally {
         setConfigLoading(false)
       }
     }
 
-    fetchConfig()
+    fetchConfigs()
   }, [])
 
-  const addManualResponse = async (prompt, response, validatedJson) => {
+  const addManualResponse = async (prompt, response, validatedJson, judgeProvider, judgeModel) => {
     setModelResponses(prev => [response, ...prev])
-    await evaluate(validatedJson, prompt, response)
+    await evaluate(validatedJson, prompt, response, judgeProvider, judgeModel)
   }
 
-  const runTestModel = async (prompt, criteria) => {
+  const runTestModel = async (prompt, criteria, testProvider, testModel, judgeProvider, judgeModel) => {
     if (!prompt.trim()) {
       setSubmitMessage('Please provide a prompt')
       return
@@ -70,14 +70,14 @@ const useLLM = () => {
       console.log('Calling LLM with: \n', prompt)
 
       // Call the LLM using the backend API
-      const response = await llmApi.generateResponse(prompt, TEST_MODEL_OPTIONS)
+      const response = await llmApi.generateResponse(prompt, { ...TEST_MODEL_OPTIONS, model: testModel, provider: testProvider })
       const llmResponse = response.data.response
 
       setSubmitMessage(`LLM Response: ${llmResponse}`)
       setModelResponses((responses) => {
         return [...responses, llmResponse]
       })
-      const res = await evaluate(criteria, prompt, llmResponse)
+      const res = await evaluate(criteria, prompt, llmResponse, judgeProvider, judgeModel)
       return res
     } catch (error) {
       console.error('LLM call failed:', error)
@@ -88,7 +88,7 @@ const useLLM = () => {
     }
   }
 
-  const evaluate = async (validatedJson, prompt, llmResponse) => {
+  const evaluate = async (validatedJson, prompt, llmResponse, judgeProvider, judgeModel) => {
     if (!validatedJson) {
       setSubmitMessage('Please provide valid JSON criteria array')
       return
@@ -324,7 +324,7 @@ ${llmResponse}
       ]
 
       // Call the LLM using the backend API with messages
-      const response = await llmApi.generateResponseWithMessages(messages, JUDGE_MODEL)
+      const response = await llmApi.generateResponseWithMessages(messages, { ...JUDGE_MODEL, model: judgeModel, provider: judgeProvider })
       console.log("llm rsponse", response)
       const judgeResponse = response.data.response
       setJudgeTextResponses(r => [...r, judgeResponse])
@@ -342,7 +342,7 @@ ${llmResponse}
     return null
   }
 
-  const batch = async (prompt, criteria, maxTry = 10, goal = 4) => {
+  const batch = async (prompt, criteria, maxTry = 10, goal = 4, testProvider, testModel, judgeProvider, judgeModel) => {
     setAttempts(0)
     setWins(0)
     let localWin = 0
@@ -350,7 +350,7 @@ ${llmResponse}
     console.log("run batch", maxTry, goal)
     while (localAttempts < maxTry && localWin < goal) {
       try {
-        const res = await runTestModel(prompt, criteria)
+        const res = await runTestModel(prompt, criteria, testProvider, testModel, judgeProvider, judgeModel)
         localAttempts++
         if (res) {
           localWin++
@@ -365,7 +365,7 @@ ${llmResponse}
 
   return {
     // State
-    llmConfig,
+    llmConfigs,
     configLoading,
     modelResponses,
     judgeParseResponses,

@@ -11,6 +11,16 @@ export class LlmService {
   constructor(private configService: ConfigService) {}
 
   /**
+   * Get provider config by model name (assumes model format: provider/model)
+   * @param model - Model name
+   * @returns LLMProviderConfig | null
+   */
+  private getConfigByProvider(provider: string): LLMProviderConfig | null {
+    const configs = this.configService.getFullAll();
+    return configs.find(config => config.provider === provider) || null;
+  }
+
+  /**
    * Configure the LLM service with provider settings
    * @param providerConfig - Provider configuration from config service
    */
@@ -35,6 +45,9 @@ export class LlmService {
         break;
       case 'google':
         this.configureGoogle(providerConfig);
+        break;
+      case 'fireworks':
+        this.configureOpenAI(providerConfig);
         break;
       default:
         throw new Error(`Unsupported provider: ${providerConfig.provider}`);
@@ -76,6 +89,27 @@ export class LlmService {
    * @returns Promise<string> - The LLM response
    */
   async generateResponse(prompt: string, options: any = {}): Promise<string> {
+    const model = options.model || this.defaultOptions.model;
+    const provider = options.provider;
+    if (!provider) {
+      throw new Error('Provider must be specified in options');
+    }
+    const providerConfig = this.getConfigByProvider(provider);
+    if (!providerConfig) {
+      throw new Error(`No provider found for provider: ${provider}`);
+    }
+    if (!providerConfig.models.includes(model)) {
+      throw new Error(`Model ${model} not available for provider ${provider}`);
+    }
+
+    // Remove provider from options as it's not a valid OpenAI parameter
+    const { provider: _, ...clientOptions } = options;
+
+    // Configure if not already configured for this provider
+    if (!this.currentProvider || this.currentProvider.id !== providerConfig.id) {
+      this.configureProvider(providerConfig);
+    }
+
     if (!this.client) {
       throw new Error(
         'LLM provider not configured. Please call configureProvider() first.',
@@ -88,7 +122,7 @@ export class LlmService {
 
     const completionOptions = {
       ...this.defaultOptions,
-      ...options,
+      ...clientOptions,
       messages: [
         {
           role: 'user',
@@ -128,6 +162,17 @@ export class LlmService {
     messages: any[],
     options: any = {},
   ): Promise<string> {
+    const provider = options.provider;
+    if (provider) {
+      const providerConfig = this.getConfigByProvider(provider);
+      if (providerConfig) {
+        // Reconfigure if different provider
+        if (!this.currentProvider || this.currentProvider.id !== providerConfig.id) {
+          this.configureProvider(providerConfig);
+        }
+      }
+    }
+
     if (!this.client) {
       throw new Error(
         'LLM provider not configured. Please call configureProvider() first.',
@@ -138,9 +183,12 @@ export class LlmService {
       throw new Error('Messages array is required and must not be empty');
     }
 
+    // Remove provider from options
+    const { provider: _, ...clientOptions } = options;
+
     const completionOptions = {
       ...this.defaultOptions,
-      ...options,
+      ...clientOptions,
       messages,
     };
 

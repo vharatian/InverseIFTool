@@ -128,15 +128,11 @@ yarn lint         # Run ESLint
 - **User**: id, email, name, password, googleId, avatar, emailVerified, timestamps
 - **LLMProviderConfig**: id, name, provider, apiKey, models, defaultModel, isActive, timestamps
 
-### Frontend (.dev.env)
+### Frontend (.env)
 
 ```env
 # Backend API Configuration
-VITE_API_BASE_URL=http://localhost:3002
-
-# OpenAI API Configuration (for client-side LLM calls)
-VITE_OPENAI_API_KEY=your_openai_api_key_here
-VITE_OPENAI_BASE_URL=https://api.openai.com/v1
+VITE_API_BASE_URL=http://localhost:3002/api  # URL to backend API (use /api for dev proxy, full URL for production)
 ```
 
 ### Backend (.env)
@@ -145,6 +141,7 @@ VITE_OPENAI_BASE_URL=https://api.openai.com/v1
 # Server Configuration
 PORT=3002
 FRONTEND_URL=http://localhost:3000
+NODE_ENV=development
 
 # Authentication
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
@@ -158,8 +155,24 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_CALLBACK_URL=http://localhost:3002/auth/google/callback
 
-# Optional: OpenAI API Key for server-side operations
-OPENAI_API_KEY=your_openai_api_key_here
+# LLM Configuration
+# List of providers (comma-separated)
+LLM_PROVIDERS=fireworks,openrouter
+
+# Fireworks Configuration (OpenAI-compatible)
+LLM_FIREWORKS_API_KEY=your_fireworks_api_key_here
+LLM_FIREWORKS_BASE_URL=https://api.fireworks.ai/inference/v1
+LLM_FIREWORKS_DEFAULT_MODEL=accounts/fireworks/models/llama-v3p1-405b-instruct
+LLM_FIREWORKS_MODELS=accounts/fireworks/models/llama-v3p1-405b-instruct,accounts/fireworks/models/mixtral-8x7b-instruct
+
+# OpenRouter Configuration (OpenAI-compatible)
+LLM_OPENROUTER_API_KEY=your_openrouter_api_key_here
+LLM_OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+LLM_OPENROUTER_DEFAULT_MODEL=openai/gpt-4o-mini
+LLM_OPENROUTER_MODELS=openai/gpt-4o-mini,anthropic/claude-3-haiku
+
+# CORS Configuration
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000  # Comma-separated list of allowed origins
 ```
 
 ## 📡 API Endpoints

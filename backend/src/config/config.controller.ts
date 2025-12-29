@@ -18,17 +18,37 @@ export class ConfigController {
 
   @Get()
   getAllConfigs() {
-    return this.configService.findAll();
+    const configs = this.configService.findAll();
+    // Return configs without sensitive information
+    return configs.map(config => ({
+      id: config.id,
+      name: config.name,
+      provider: config.provider,
+      models: config.models,
+      defaultModel: config.defaultModel,
+      isActive: config.isActive,
+      createdAt: config.createdAt,
+      updatedAt: config.updatedAt,
+      // Omit apiKey and baseUrl
+    }));
   }
 
   @Get('active')
-  getActiveConfig(): LLMProviderConfig | { error: string } {
+  getActiveConfig(): { models: string[]; defaultModel: string } | { error: string } {
     const config = this.configService.findActive();
     if (!config) {
       return { error: 'No active configuration found' };
     }
-    // Return full config with API key for frontend to use
-    return config;
+    // Return only public info, no API key or base URL
+    return {
+      models: config.models,
+      defaultModel: config.defaultModel,
+    };
+  }
+
+  @Get('models')
+  getAllModels(): string[] {
+    return this.configService.getAllModels();
   }
 
   @Get(':id')

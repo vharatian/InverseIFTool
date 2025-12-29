@@ -1,29 +1,48 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Backend (NestJS)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A NestJS backend service for the JSON Prompt Application, providing authentication, user management, and LLM configuration APIs.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Environment Variables
 
-## Description
+Create a `.env` file in the backend directory with the following variables:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+```env
+# Server Configuration
+PORT=3002
+NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
+
+# Authentication
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+
+# Admin User (created when running yarn seed)
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=admin123
+
+# Google OAuth (optional)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:3002/auth/google/callback
+
+# LLM Configuration
+# List of providers (comma-separated)
+LLM_PROVIDERS=fireworks,openrouter
+
+# Fireworks Configuration (OpenAI-compatible)
+LLM_FIREWORKS_API_KEY=your_fireworks_api_key_here
+LLM_FIREWORKS_BASE_URL=https://api.fireworks.ai/inference/v1
+LLM_FIREWORKS_DEFAULT_MODEL=accounts/fireworks/models/llama-v3p1-405b-instruct
+LLM_FIREWORKS_MODELS=accounts/fireworks/models/llama-v3p1-405b-instruct,accounts/fireworks/models/mixtral-8x7b-instruct
+
+# OpenRouter Configuration (OpenAI-compatible)
+LLM_OPENROUTER_API_KEY=your_openrouter_api_key_here
+LLM_OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+LLM_OPENROUTER_DEFAULT_MODEL=openai/gpt-4o-mini
+LLM_OPENROUTER_MODELS=openai/gpt-4o-mini,anthropic/claude-3-haiku
+
+# CORS Configuration
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000  # Comma-separated list of allowed origins
+```
 
 ## Project setup
 
