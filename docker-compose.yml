@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - FRONTEND_URL=http://localhost
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=admin123
+      - GOOGLE_CLIENT_ID=your-google-client-id
+      - GOOGLE_CLIENT_SECRET=your-google-client-secret
+      - GOOGLE_CALLBACK_URL=http://localhost:3002/auth/google/callback
+      - LLM_PROVIDER=openai
+      - LLM_API_KEY=fw_5iroUegK66x89qxE8ofBrY
+      - LLM_BASE_URL=https://api.fireworks.ai/inference/v1
+      - LLM_DEFAULT_MODEL=qwen/qwen3-coder:free
+      - LLM_MODELS=qwen/qwen3-coder:free    
+    volumes:
+      - db_data:/app/data
+
+  frontend:
+    build: ./frontend
+    environment:
+      - NODE_ENV=production
+
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  db_data:

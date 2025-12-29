@@ -12,7 +12,7 @@ export class LlmController implements OnModuleInit {
   async onModuleInit() {
     // Configure the LLM service with the active config on startup
     const config = this.configService.findActive();
-    if (config) {
+    if (config && config.apiKey) {
       this.llmService.configureProvider(config);
     }
   }
