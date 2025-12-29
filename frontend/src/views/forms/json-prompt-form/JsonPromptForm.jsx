@@ -45,6 +45,8 @@ const JsonPromptForm = () => {
     // Actions
     batch,
     addManualResponse,
+    cancelBatch,
+    resetResults,
   } = useLLM()
 
   const handleJsonValid = (parsedArray) => {
@@ -257,7 +259,17 @@ const JsonPromptForm = () => {
                   {isSubmitting ? 'Processing...' : 'Run'}
                 </CButton>
 
-                <CButton color="primary" type="submit" disabled={isSubmitting || configLoading} name="action" value="test">
+                {isSubmitting && (
+                  <CButton className='m-2' color="danger" onClick={cancelBatch}>
+                    Cancel
+                  </CButton>
+                )}
+
+                <CButton className='m-2' color="secondary" onClick={resetResults} disabled={isSubmitting}>
+                  Reset Results
+                </CButton>
+
+                <CButton className='m-2' color="primary" type="submit" disabled={isSubmitting || configLoading} name="action" value="test">
                   {isSubmitting ? 'Processing...' : 'Test Ideal'}
                 </CButton>
               </CForm>

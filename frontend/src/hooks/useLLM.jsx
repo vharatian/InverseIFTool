@@ -23,6 +23,7 @@ const useLLM = () => {
   const [judgeParseResponses, setJudgeParsedResponses] = useState([])
   const [attempts, setAttempts] = useState(0)
   const [wins, setWins] = useState(0)
+  const [abortController, setAbortController] = useState(null)
 
   // Fetch LLM configurations from backend on hook initialization
   useEffect(() => {
@@ -55,6 +56,23 @@ const useLLM = () => {
   const addManualResponse = async (prompt, response, validatedJson, judgeProvider, judgeModel) => {
     setModelResponses(prev => [response, ...prev])
     await evaluate(validatedJson, prompt, response, judgeProvider, judgeModel)
+  }
+
+  const cancelBatch = () => {
+    if (abortController) {
+      abortController.abort()
+      setIsSubmitting(false)
+      setSubmitMessage('Batch operation cancelled')
+    }
+  }
+
+  const resetResults = () => {
+    setModelResponses([])
+    setJudgeTextResponses([])
+    setJudgeParsedResponses([])
+    setAttempts(0)
+    setWins(0)
+    setSubmitMessage('')
   }
 
   const runTestModel = async (prompt, criteria, testProvider, testModel, judgeProvider, judgeModel) => {
@@ -343,23 +361,29 @@ ${llmResponse}
   }
 
   const batch = async (prompt, criteria, maxTry = 10, goal = 4, testProvider, testModel, judgeProvider, judgeModel) => {
+    const controller = new AbortController()
+    setAbortController(controller)
     setAttempts(0)
     setWins(0)
     let localWin = 0
     let localAttempts = 0
     console.log("run batch", maxTry, goal)
-    while (localAttempts < maxTry && localWin < goal) {
-      try {
-        const res = await runTestModel(prompt, criteria, testProvider, testModel, judgeProvider, judgeModel)
-        localAttempts++
-        if (res) {
-          localWin++
+    try {
+      while (localAttempts < maxTry && localWin < goal && !controller.signal.aborted) {
+        try {
+          const res = await runTestModel(prompt, criteria, testProvider, testModel, judgeProvider, judgeModel)
+          localAttempts++
+          if (res) {
+            localWin++
+          }
+          setAttempts((prev) => prev++)
+          await sleep(500)
+        } catch (e) {
+          await sleep(500)
         }
-        setAttempts((prev) => prev++)
-        await sleep(500)
-      } catch (e) {
-        await sleep(500)
       }
+    } finally {
+      setAbortController(null)
     }
   }
 
@@ -377,9 +401,10 @@ ${llmResponse}
 
 
     // Actions
-    setSubmitMessage,
     batch,
     addManualResponse,
+    cancelBatch,
+    resetResults,
   }
 }
 
