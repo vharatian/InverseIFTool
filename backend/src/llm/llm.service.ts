@@ -49,6 +49,9 @@ export class LlmService {
       case 'fireworks':
         this.configureOpenAI(providerConfig);
         break;
+      case 'openrouter':
+        this.configureOpenAI(providerConfig);
+        break;
       default:
         throw new Error(`Unsupported provider: ${providerConfig.provider}`);
     }
