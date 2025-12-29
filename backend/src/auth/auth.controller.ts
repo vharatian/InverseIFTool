@@ -15,10 +15,13 @@ import { AuthService } from './auth.service';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  @UseGuards(AuthGuard('local'))
   @Post('login')
-  async login(@Request() req) {
-    return this.authService.login(req.user);
+  async login(@Body() body: { email: string; password: string }) {
+    const user = await this.authService.validateUser(body.email, body.password);
+    if (!user) {
+      throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
+    }
+    return this.authService.login(user);
   }
 
   @Post('register')
