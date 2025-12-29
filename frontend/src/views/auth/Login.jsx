@@ -14,7 +14,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { useAuth } from '../../contexts/AuthContext'
-import { api } from '../../services/api'
+import api from '../../services/api'
 
 const Login = () => {
   const [email, setEmail] = useState('')
