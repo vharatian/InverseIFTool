@@ -4,11 +4,7 @@ export interface LLMProviderConfig {
   id: string;
   name: string;
   provider: string;
-  sdk:
-    | 'openai'
-    | 'anthropic'
-    | 'google'
-    | 'custom';
+  sdk: 'openai' | 'anthropic' | 'google' | 'custom';
   apiKey: string;
   baseUrl?: string;
   models: string[];

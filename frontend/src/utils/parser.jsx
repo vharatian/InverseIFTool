@@ -14,47 +14,56 @@ export function parseEvaluation(text) {
     score: null,
     json: null,
     explanation: null,
-  };
+  }
 
   // Helper to extract section content
   const extractSection = (label) => {
-    const regex = new RegExp(
-      `\\[${label}\\]:\\s*([\\s\\S]*?)(?=\\n\\[|$)`,
-      "i"
-    );
-    const match = text.match(regex);
-    return match ? match[1].trim() : null;
-  };
+    const regex = new RegExp(`\\[${label}\\]:\\s*([\\s\\S]*?)(?=\\n\\[|$)`, 'i')
+    const match = text.match(regex)
+    return match ? match[1].trim() : null
+  }
 
   // Grading Basis (JSON)
-  const gradingBasisRaw = extractSection("Grading Basis");
+  const gradingBasisRaw = extractSection('Grading Basis')
   if (gradingBasisRaw) {
     try {
-      result.gradingBasis = JSON.parse(gradingBasisRaw);
+      result.gradingBasis = JSON.parse(gradingBasisRaw)
     } catch {
-      throw new Error("Invalid JSON in [Grading Basis]");
+      throw new Error('Invalid JSON in [Grading Basis]')
     }
   }
 
   // Score
-  const scoreRaw = extractSection("Score");
+  const scoreRaw = extractSection('Score')
   if (scoreRaw) {
-    const numMatch = scoreRaw.match(/(\d+(\.\d+)?)/);
-    result.score = numMatch ? Number(numMatch[1]) : scoreRaw;
+    const numMatch = scoreRaw.match(/(\d+(\.\d+)?)/)
+    result.score = numMatch ? Number(numMatch[1]) : scoreRaw
   }
 
   // JSON
-  const jsonRaw = extractSection("JSON");
+  const jsonRaw = extractSection('JSON')
   if (jsonRaw) {
     try {
-      result.json = JSON.parse(jsonRaw);
+      result.json = JSON.parse(jsonRaw)
     } catch {
-      throw new Error("Invalid JSON in [JSON]");
+      throw new Error('Invalid JSON in [JSON]')
     }
   }
 
   // Explanation
-  result.explanation = extractSection("Explanation");
+  result.explanation = extractSection('Explanation')
 
-  return result;
+  // If score not found, calculate from gradingBasis
+  if (result.score == null && result.gradingBasis) {
+    const criteriaCount = Object.keys(result.gradingBasis).length
+    const passCount = Object.values(result.gradingBasis).filter(
+      (status) => status === 'PASS',
+    ).length
+    result.score = passCount > criteriaCount / 2 ? 1 : 0
+    if (!result.explanation) {
+      result.explanation = `Calculated score: ${passCount}/${criteriaCount} criteria passed`
+    }
+  }
+
+  return result
 }

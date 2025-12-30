@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import {
   CAccordion,
   CAccordionBody,
@@ -24,14 +24,23 @@ import PropTypes from 'prop-types'
  * @param {Array<{id: string, gradingBasis: Object, score: number}>} props.judgeParseResponses - Array of parsed judge responses with id
  * @param {Array<{id: string, content: string}>} props.judgeTextResponses - Array of raw judge response objects with id
  */
-const ResultsAccordion = ({
-  modelResponses,
-  judgeParseResponses,
-  judgeTextResponses,
-}) => {
+const ResultsAccordion = ({ modelResponses, judgeParseResponses, judgeTextResponses }) => {
   const [copiedItems, setCopiedItems] = useState(new Set())
 
-  if (!modelResponses || modelResponses.length === 0) {
+  const combinedResponses = useMemo(() => {
+    if (!modelResponses || modelResponses.length === 0) return []
+    return modelResponses.map((res) => ({
+      res,
+      judgeParsed: judgeParseResponses.find((j) => j.id === res.id),
+      judgeText: judgeTextResponses.find((j) => j.id === res.id),
+    }))
+  }, [modelResponses, judgeParseResponses, judgeTextResponses])
+
+  useEffect(() => {
+    // Update combined responses when any response arrays change
+  }, [judgeParseResponses, judgeTextResponses, modelResponses])
+
+  if (combinedResponses.length === 0) {
     return null
   }
 
@@ -39,11 +48,11 @@ const ResultsAccordion = ({
     try {
       await navigator.clipboard.writeText(content)
       const copyId = `${itemId}-${type}`
-      setCopiedItems(prev => new Set([...prev, copyId]))
+      setCopiedItems((prev) => new Set([...prev, copyId]))
 
       // Remove the "copied" state after 2 seconds
       setTimeout(() => {
-        setCopiedItems(prev => {
+        setCopiedItems((prev) => {
           const newSet = new Set(prev)
           newSet.delete(copyId)
           return newSet
@@ -64,7 +73,7 @@ const ResultsAccordion = ({
         const time = new Date(timestamp).toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
-          second: '2-digit'
+          second: '2-digit',
         })
         const runDisplay = response.runId ? `[${response.runId.split('_')[1]}] ` : ''
         return `Run ${runDisplay}`
@@ -78,47 +87,43 @@ const ResultsAccordion = ({
 
   return (
     <CRow>
-      <CAccordion activeItemKey={1} className='mb-5'>
-        {modelResponses.map((res, index) => {
-          // Find matching judge responses by ID
-          const judgeParsed = judgeParseResponses.find(j => j.id === res.id)
-          const judgeText = judgeTextResponses.find(j => j.id === res.id)
-
+      <CAccordion activeItemKey={1} className="mb-5">
+        {combinedResponses.map(({ res, judgeParsed, judgeText }, index) => {
           return (
             <CAccordionItem itemKey={index + 1} key={res.id}>
               <CAccordionHeader>
-                <strong style={{ marginRight: "10px" }}>{getReadableId(res, index)}</strong>
-                {judgeParsed && judgeParsed.gradingBasis ?
-                  Object.keys(judgeParsed.gradingBasis).map(key => (
+                <strong style={{ marginRight: '10px' }}>{getReadableId(res, index)}</strong>
+                {judgeParsed && judgeParsed.gradingBasis ? (
+                  Object.keys(judgeParsed.gradingBasis).map((key) => (
                     <CBadge
                       key={key}
-                      style={{ marginRight: "10px" }}
-                      color={judgeParsed.gradingBasis[key] !== "FAIL" ? "success" : "danger"}
+                      style={{ marginRight: '10px' }}
+                      color={judgeParsed.gradingBasis[key] !== 'FAIL' ? 'success' : 'danger'}
                     >
                       {key}
                     </CBadge>
-                  )) : <CBadge
-                    style={{ marginRight: "10px" }}
-                    color="danger"
-                  >
+                  ))
+                ) : (
+                  <CBadge style={{ marginRight: '10px' }} color="danger">
                     Judge Failed
                   </CBadge>
-
-                }
-                {judgeParsed && judgeParsed.score != undefined &&
+                )}
+                {judgeParsed && judgeParsed.score != undefined && (
                   <CBadge
-                    style={{ marginRight: "10px" }}
-                    color={judgeParsed.score !== 0 ? "success" : "danger"}
+                    style={{ marginRight: '10px' }}
+                    color={judgeParsed.score !== 0 ? 'success' : 'danger'}
                   >
                     score
                   </CBadge>
-                }
+                )}
               </CAccordionHeader>
               <CAccordionBody>
                 <CTabs defaultActiveItemKey="response">
                   <CTabList variant="tabs">
                     <CTab itemKey="response">Response</CTab>
-                    <CTab itemKey="evaluation" disabled={!judgeText}>Evaluation</CTab>
+                    <CTab itemKey="evaluation" disabled={!judgeText}>
+                      Evaluation
+                    </CTab>
                   </CTabList>
                   <CTabContent>
                     <CTabPanel className="p-3" itemKey="response">
@@ -128,7 +133,7 @@ const ResultsAccordion = ({
                         </div>
                         <CButton
                           size="sm"
-                          color={copiedItems.has(`${res.id}-response`) ? "success" : "secondary"}
+                          color={copiedItems.has(`${res.id}-response`) ? 'success' : 'secondary'}
                           onClick={() => copyToClipboard(res.content, res.id, 'response')}
                           title="Copy response to clipboard"
                         >
@@ -147,8 +152,10 @@ const ResultsAccordion = ({
                         </div>
                         <CButton
                           size="sm"
-                          color={copiedItems.has(`${res.id}-evaluation`) ? "success" : "secondary"}
-                          onClick={() => copyToClipboard(judgeText?.content || '', res.id, 'evaluation')}
+                          color={copiedItems.has(`${res.id}-evaluation`) ? 'success' : 'secondary'}
+                          onClick={() =>
+                            copyToClipboard(judgeText?.content || '', res.id, 'evaluation')
+                          }
                           disabled={!judgeText}
                           title="Copy evaluation to clipboard"
                         >
@@ -167,27 +174,33 @@ const ResultsAccordion = ({
           )
         })}
       </CAccordion>
-    </CRow >
+    </CRow>
   )
 }
 
 ResultsAccordion.propTypes = {
-  modelResponses: PropTypes.arrayOf(PropTypes.shape({
-    id: PropTypes.string.isRequired,
-    content: PropTypes.string.isRequired,
-    runId: PropTypes.string,
-  })),
-  judgeParseResponses: PropTypes.arrayOf(PropTypes.shape({
-    id: PropTypes.string.isRequired,
-    gradingBasis: PropTypes.object,
-    score: PropTypes.number,
-    runId: PropTypes.string,
-  })),
-  judgeTextResponses: PropTypes.arrayOf(PropTypes.shape({
-    id: PropTypes.string.isRequired,
-    content: PropTypes.string.isRequired,
-    runId: PropTypes.string,
-  })),
+  modelResponses: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      content: PropTypes.string.isRequired,
+      runId: PropTypes.string,
+    }),
+  ),
+  judgeParseResponses: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      gradingBasis: PropTypes.object,
+      score: PropTypes.number,
+      runId: PropTypes.string,
+    }),
+  ),
+  judgeTextResponses: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      content: PropTypes.string.isRequired,
+      runId: PropTypes.string,
+    }),
+  ),
 }
 
 export default ResultsAccordion

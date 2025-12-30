@@ -8,7 +8,7 @@ export class LlmService {
   private currentProvider: LLMProviderConfig | null = null;
   private defaultOptions: any = {};
 
-  constructor(private configService: ConfigService) { }
+  constructor(private configService: ConfigService) {}
 
   /**
    * Get provider config by model name (assumes model format: provider/model)
@@ -110,7 +110,9 @@ export class LlmService {
       !this.currentProvider ||
       this.currentProvider.id !== providerConfig.id
     ) {
-      console.log(`[LLM Service] Configuring provider: ${providerConfig.provider}`);
+      console.log(
+        `[LLM Service] Configuring provider: ${providerConfig.provider}`,
+      );
       this.configureProvider(providerConfig);
     }
 
@@ -122,11 +124,14 @@ export class LlmService {
     }
 
     if (!prompt || typeof prompt !== 'string') {
-      console.error(`[LLM Service] Invalid prompt:`, { prompt, type: typeof prompt });
+      console.error(`[LLM Service] Invalid prompt:`, {
+        prompt,
+        type: typeof prompt,
+      });
       throw new Error('Prompt is required and must be a string');
     }
 
-    console.log("call llm prompot ---->", prompt)
+
     const completionOptions = {
       ...this.defaultOptions,
       ...clientOptions,
@@ -147,10 +152,11 @@ export class LlmService {
             await this.client.chat.completions.create(completionOptions);
 
           response = completion.choices[0]?.message?.content || '';
-          console.log("llm response --->", completion.choices[0].message)
 
           if (!response) {
-            console.warn(`[LLM Service] OpenAI returned empty response for ${model}`);
+            console.warn(
+              `[LLM Service] OpenAI returned empty response for ${model}`,
+            );
           }
 
           break;
@@ -197,7 +203,10 @@ export class LlmService {
     }
 
     if (!Array.isArray(messages) || messages.length === 0) {
-      console.error(`[LLM Service] Invalid messages array:`, { messages, isArray: Array.isArray(messages) });
+      console.error(`[LLM Service] Invalid messages array:`, {
+        messages,
+        isArray: Array.isArray(messages),
+      });
       throw new Error('Messages array is required and must not be empty');
     }
 
@@ -221,7 +230,9 @@ export class LlmService {
           response = completion.choices[0]?.message?.content || '';
 
           if (!response) {
-            console.warn(`[LLM Service] OpenAI returned empty response for evaluation`);
+            console.warn(
+              `[LLM Service] OpenAI returned empty response for evaluation`,
+            );
           }
 
           break;

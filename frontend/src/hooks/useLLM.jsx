@@ -19,16 +19,23 @@ const TEST_MODEL_OPTIONS = {
  */
 const JUDGE_MODEL = {
   temperature: 1,
-  reasoning_effort: "medium"
+  reasoning_effort: 'medium',
   // top_p: 0,
 }
 
 /**
+ * Maximum number of concurrent evaluation runs
+ * @constant {number}
+ */
+const CONCURRENT_RUN_LIMIT = 5
+
+/**
  * Custom hook for LLM operations including model testing, evaluation, and batch processing
  * Manages state for LLM configurations, responses, and evaluation results
+ * @param {Function} addMessage - Function to add messages to UI
  * @returns {Object} Hook interface with state and actions
  */
-const useLLM = () => {
+const useLLM = (addMessage) => {
   // State management
   /** @type {LLMProviderConfig[]} Array of available LLM provider configurations */
   const [llmConfigs, setLlmConfigs] = useState([])
@@ -44,13 +51,16 @@ const useLLM = () => {
   const [judgeTextResponses, setJudgeTextResponses] = useState([])
   /** @type {Array<{id: string, gradingBasis: Object, score: number}>} Parsed evaluation results from judge responses with IDs */
   const [judgeParseResponses, setJudgeParsedResponses] = useState([])
-  const [latestBatchResult, setLatestBatchResult] = useState(null) // Store latest batch result
-  /** @type {number} Total number of attempts made in batch operations */
-  const [attempts, setAttempts] = useState(0)
-  /** @type {number} Number of successful evaluations (wins) */
-  const [wins, setWins] = useState(0)
   /** @type {AbortController|null} Controller for cancelling ongoing operations */
   const [abortController, setAbortController] = useState(null)
+  const [pendingScoreRunId, setPendingScoreRunId] = useState(null)
+  const [scoreState, setScoreState] = useState({
+    attempts: 0,
+    wins: 0,
+    losses: 0,
+    parseFailures: 0,
+    criteriaStats: {},
+  })
 
   // Fetch LLM configurations from backend on hook initialization
   useEffect(() => {
@@ -59,16 +69,17 @@ const useLLM = () => {
         const response = await configApi.getAll()
         const configs = response.data
         setLlmConfigs(configs)
-        console.log('Fetched LLM configs:', configs)
       } catch (error) {
         console.warn('Could not fetch LLM configs from backend:', error.message)
         // Fall back to client-side environment variables
-        const fallbackConfigs = [{
-          provider: 'openai',
-          defaultModel: 'gpt-4o-mini',
-          models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
-          isActive: true,
-        }]
+        const fallbackConfigs = [
+          {
+            provider: 'openai',
+            defaultModel: 'gpt-4o-mini',
+            models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
+            isActive: true,
+          },
+        ]
         setLlmConfigs(fallbackConfigs)
         setConfigLoading(false)
         setAvailableModels(['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'])
@@ -89,12 +100,31 @@ const useLLM = () => {
    * @param {string} judgeModel - Model to use for evaluation
    * @returns {Promise<boolean|null>} Evaluation result
    */
-  const addManualResponse = async (prompt, response, validatedJson, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId) => {
+  const addManualResponse = async (
+    prompt,
+    response,
+    validatedJson,
+    judgeProvider,
+    judgeModel,
+    judgeSystemPrompt,
+    onProgress,
+    runId,
+  ) => {
     if (onProgress) onProgress('Adding manual response for evaluation...')
 
     const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    setModelResponses(prev => [{ id: responseId, content: response, runId }, ...prev])
-    await evaluate(responseId, validatedJson, prompt, response, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId)
+    setModelResponses((prev) => [{ id: responseId, content: response, runId }, ...prev])
+    await evaluate(
+      responseId,
+      validatedJson,
+      prompt,
+      response,
+      judgeProvider,
+      judgeModel,
+      judgeSystemPrompt,
+      onProgress,
+      runId,
+    )
   }
 
   /**
@@ -110,162 +140,188 @@ const useLLM = () => {
   /**
    * Reset all results and counters to initial state
    */
-  // Analyze batch diversity criteria
-  const analyzeBatchDiversity = (runId) => {
-    console.log('=== ANALYZING BATCH DIVERSITY ===')
-    console.log('Target runId:', runId)
-    console.log('Total judgeParseResponses:', judgeParseResponses.length)
-    console.log('judgeParseResponses:', judgeParseResponses)
-
-    // Debug: show all runIds in responses
-    const allRunIds = [...new Set(judgeParseResponses.map(r => r.runId))]
-    console.log('All runIds in responses:', allRunIds)
-
-    console.log('judgeParseResponses with matching runId:', judgeParseResponses.filter(r => r.runId === runId))
-
-    // Get all parsed responses for this run
-    const runResponses = judgeParseResponses.filter(r => r.runId === runId)
-
-    if (runResponses.length === 0) {
-      console.log('❌ No responses found for runId:', runId)
-      console.log('Available responses:', judgeParseResponses.map(r => ({ id: r.id, runId: r.runId })))
-      return null
-    }
-
-    console.log('✅ Found', runResponses.length, 'responses for batch analysis')
-
-    // Get grading basis from first response to know criteria names
-    const firstResponse = runResponses[0]
-    if (!firstResponse.gradingBasis) return null
-
-    const criteriaNames = Object.keys(firstResponse.gradingBasis)
-    let diverseCriteriaCount = 0
-
-    // For each criteria, check if it has both PASS and FAIL across all attempts
-    for (const criteriaName of criteriaNames) {
-      const results = runResponses.map(r => r.gradingBasis[criteriaName])
-      const hasPass = results.includes('PASS')
-      const hasFail = results.includes('FAIL')
-
-      if (hasPass && hasFail) {
-        diverseCriteriaCount++
-      }
-    }
-
-    // Most criteria (more than half) must have diversity
-    const requiredDiversity = Math.ceil(criteriaNames.length / 2)
-    const batchWin = diverseCriteriaCount >= requiredDiversity
-
-    const batchResult = {
-      runId,
-      totalCriteria: criteriaNames.length,
-      diverseCriteria: diverseCriteriaCount,
-      requiredDiversity,
-      batchWin,
-      criteriaDetails: criteriaNames.map(name => ({
-        name,
-        hasDiversity: runResponses.some(r => r.gradingBasis[name] === 'PASS') &&
-          runResponses.some(r => r.gradingBasis[name] === 'FAIL')
-      }))
-    }
-
-    console.log('Setting latest batch result:', batchResult)
-    setLatestBatchResult(batchResult)
-    return batchResult
-  }
 
   const resetResults = () => {
     setModelResponses([])
     setJudgeTextResponses([])
     setJudgeParsedResponses([])
-    setLatestBatchResult(null)
-    setAttempts(0)
-    setWins(0)
+    setScoreState({
+      attempts: 0,
+      wins: 0,
+      losses: 0,
+      parseFailures: 0,
+      criteriaStats: {},
+    })
   }
 
   /**
-   * Run a single test with the specified model and evaluate the result
-   * @param {string} prompt - The prompt to send to the test model
-   * @param {Array} criteria - Evaluation criteria array
-   * @param {string} testProvider - Provider to use for test model
-   * @param {string} testModel - Model to use for generation
-   * @param {string} judgeProvider - Provider to use for evaluation
-   * @param {string} judgeModel - Model to use for judging responses
-   * @returns {Promise<boolean|null>} True if evaluation passed, false if failed, null if error
+   * Generate a response from an LLM model
+   * @param {string} prompt - The prompt to send to the model
+   * @param {string} model - Model identifier
+   * @param {string} provider - Provider name
    */
-  const runTestModel = async (prompt, criteria, testProvider, testModel, judgeProvider, judgeModel, onProgress, runId, judgeSystemPrompt) => {
-    if (!prompt.trim()) {
-      throw new Error('Please provide a prompt')
+  const generate = async (prompt, model, provider) => {
+    const requestOptions = { ...TEST_MODEL_OPTIONS, model, provider }
+    const response = await llmApi.generateResponse(prompt, requestOptions)
+
+    const llmResponse = response.data?.response || ''
+
+    if (!llmResponse || llmResponse.trim().length === 0) {
+      console.warn(`Empty response from ${model}`)
+      addMessage('Warning: Empty response from model', 'warning', 'llm')
     }
 
-    setIsSubmitting(true)
+    return llmResponse
+  }
+
+  /**
+   * Update score state with evaluation result and return the score
+   * @param {Object} evaluation - Parsed evaluation result
+   * @returns {number|null} The score from the evaluation
+   */
+  const score = (evaluation) => {
+    let category = 'failure'
+    setScoreState((prev) => {
+      const newCriteriaStats = { ...prev.criteriaStats }
+      Object.entries(evaluation.gradingBasis || {}).forEach(([criteria, result]) => {
+        if (!newCriteriaStats[criteria]) {
+          newCriteriaStats[criteria] = { pass: 0, fail: 0 }
+        }
+        if (result === 'PASS') {
+          newCriteriaStats[criteria].pass += 1
+        } else if (result === 'FAIL') {
+          newCriteriaStats[criteria].fail += 1
+        }
+      })
+      const isParseFailure =
+        !('score' in evaluation) ||
+        evaluation.score == null ||
+        typeof evaluation.score !== 'number' ||
+        isNaN(evaluation.score)
+      const isWin =
+        typeof evaluation.score === 'number' && !isNaN(evaluation.score) && evaluation.score === 0
+      const isLoss =
+        typeof evaluation.score === 'number' && !isNaN(evaluation.score) && evaluation.score > 0
+      const isUncounted = !isWin && !isLoss && !isParseFailure
+
+      category = isWin ? 'win' : isLoss ? 'loss' : 'failure'
+
+      return {
+        attempts: prev.attempts + 1,
+        wins: prev.wins + (isWin ? 1 : 0),
+        losses: prev.losses + (isLoss ? 1 : 0),
+        parseFailures: prev.parseFailures + (isParseFailure ? 1 : 0),
+        criteriaStats: newCriteriaStats,
+      }
+    })
+    return { score: evaluation.score, category }
+  }
+
+  /**
+   * Run a single evaluation attempt: generate response and evaluate it
+   * @param {string} prompt - Prompt to test
+   * @param {Array} criteria - Evaluation criteria
+   * @param {string} testModel - Test model
+   * @param {string} testProvider - Test provider
+   * @param {string} judgeModel - Judge model
+   * @param {string} judgeProvider - Judge provider
+   * @param {string} judgeSystemPrompt - Judge system prompt
+   * @param {string} runId - Run identifier
+   * @returns {Promise<Object>} Evaluation result
+   */
+  const run = async (
+    prompt,
+    criteria,
+    testModel,
+    testProvider,
+    judgeModel,
+    judgeProvider,
+    judgeSystemPrompt,
+    runId,
+  ) => {
+    addMessage(`Starting evaluation [${runId}]`, 'info', 'evaluation')
 
     try {
-      if (onProgress) onProgress('Starting model generation...')
+      // Generate response
+      const llmResponse = await generate(prompt, testModel, testProvider)
 
-      // Call the LLM using the backend API
-      if (onProgress) onProgress('Generating response...')
-
-      const requestOptions = { ...TEST_MODEL_OPTIONS, model: testModel, provider: testProvider }
-      const response = await llmApi.generateResponse(prompt, requestOptions)
-
-      const llmResponse = response.data?.response || ''
-
-      if (!llmResponse || llmResponse.trim().length === 0) {
-        console.warn(`Empty response from ${testModel}`)
-        if (onProgress) onProgress('Warning: Empty response from model')
-      }
-
-      if (onProgress) onProgress(`Response generated (${llmResponse.length} chars)`)
-
+      // Store response
       const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       setModelResponses((responses) => {
-        console.log('Storing model response with runId:', runId, 'responseId:', responseId)
         return [...responses, { id: responseId, content: llmResponse, runId }]
       })
 
-      if (onProgress) onProgress('Starting evaluation...')
-
+      // Evaluate response
+      let evaluation
       try {
-        const res = await evaluate(responseId, criteria, prompt, llmResponse, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId)
-
-        if (onProgress) onProgress(`Evaluation completed: ${res ? 'PASS' : 'FAIL'}`)
-        return res
-      } catch (evalError) {
-        console.error('Evaluation failed:', evalError)
-        if (onProgress) onProgress(`Evaluation failed: ${evalError.message}`)
-        throw evalError
+        evaluation = await evaluateResponse(
+          llmResponse,
+          criteria,
+          prompt,
+          responseId,
+          judgeModel,
+          judgeProvider,
+          judgeSystemPrompt,
+          runId,
+        )
+      } catch (error) {
+        // Store error as judge response
+        setJudgeTextResponses((r) => [
+          ...r,
+          { id: responseId, content: `Evaluation failed: ${error.message}`, runId },
+        ])
+        // Return a failed evaluation
+        evaluation = {
+          gradingBasis: null,
+          score: null,
+          json: null,
+          explanation: `Evaluation failed: ${error.message}`,
+        }
       }
-    } catch (error) {
-      console.error('LLM call failed:', error)
-      if (onProgress) onProgress(`Model generation failed: ${error.message}`)
-      throw error // Re-throw to let caller handle logging
-    } finally {
-      setIsSubmitting(false)
+
+      const scoreResult = score(evaluation)
+      return { evaluation, ...scoreResult }
+    } catch (e) {
+      addMessage(`ERROR: ${e.message}`, 'error', 'evaluation')
+      throw e
     }
   }
 
   /**
-   * Evaluate a response against criteria using a judge LLM
-   * @param {string} responseId - Unique ID for this response set
-   * @param {Array} validatedJson - Array of evaluation criteria objects
-   * @param {string} prompt - The original prompt given to the test model
-   * @param {string} llmResponse - The response from the test model to evaluate
-   * @param {string} judgeProvider - Provider to use for the judge model
-   * @param {string} judgeModel - Model to use for evaluation
-    * @returns {Promise<boolean>} True if evaluation passed (score > 0 means success), false if failed
+   * Evaluate a response against criteria using judge model
+   * @param {string} response - Response text to evaluate
+   * @param {Array} criteria - Evaluation criteria array
+   * @param {string} prompt - Original prompt for context
+   * @param {string} responseId - Unique identifier for this response
+   * @param {string} judgeModel - Judge model to use
+   * @param {string} judgeProvider - Judge provider
+   * @param {string} judgeSystemPrompt - System prompt for judge
+   * @param {string} runId - Run identifier for tracking
+   * @returns {Promise<Object>} Parsed evaluation result with gradingBasis, score, json, explanation
    */
-  const evaluate = async (responseId, validatedJson, prompt, llmResponse, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId) => {
-    console.log('Evaluate called with judgeSystemPrompt:', judgeSystemPrompt ? 'present' : 'empty', judgeSystemPrompt?.length || 0, 'chars')
+  const evaluateResponse = async (
+    response,
+    criteria,
+    prompt,
+    responseId,
+    judgeModel,
+    judgeProvider,
+    judgeSystemPrompt,
+    runId,
+  ) => {
+    console.log(
+      'Evaluate called with judgeSystemPrompt:',
+      judgeSystemPrompt ? 'present' : 'empty',
+      judgeSystemPrompt?.length || 0,
+      'chars',
+    )
 
-    if (!validatedJson) {
+    if (!criteria) {
       throw new Error('Please provide valid JSON criteria array')
     }
 
     // Allow empty responses for evaluation (they should fail criteria)
-    if (llmResponse === undefined || llmResponse === null) {
-      llmResponse = ''
-    }
+    const responseText = response || ''
 
     setIsSubmitting(true)
 
@@ -273,24 +329,17 @@ const useLLM = () => {
       // Fill the judge prompt template
       const responseReference = `Each criterion is evaluated independently as PASS or FAIL.
 
-${JSON.stringify(validatedJson)}
+${JSON.stringify(criteria)}
 
 Failure to PASS more than 50% of the above criteria will result in a score of 0 points.
 `
 
       const judgePrompt = `${prompt}
 
-${responseReference}
+ ${responseReference}
 
-${llmResponse}
-`
-
-      console.log(`Judge evaluation `, {
-        criteria: validatedJson,
-        originalPrompt: prompt,
-        llmResponse: llmResponse,
-        judgePrompt: judgePrompt,
-      })
+ ${responseText}
+ `
 
       // Create messages array for the judge
       const messages = [
@@ -304,29 +353,20 @@ ${llmResponse}
         },
       ]
 
-      console.log('Judge API call messages:', {
-        systemMessageLength: judgeSystemPrompt?.length || 0,
-        userMessageLength: judgePrompt?.length || 0,
-        systemContentPreview: judgeSystemPrompt?.substring(0, 100) + '...'
-      })
-
       // Call the LLM using the backend API with messages
-      const response = await llmApi.generateResponseWithMessages(messages, { ...JUDGE_MODEL, model: judgeModel, provider: judgeProvider })
+      const response = await llmApi.generateResponseWithMessages(messages, {
+        ...JUDGE_MODEL,
+        model: judgeModel,
+        provider: judgeProvider,
+      })
       const judgeResponse = response.data.response
 
-      console.log('Storing judge response with runId:', runId, 'responseId:', responseId)
-      setJudgeTextResponses(r => [...r, { id: responseId, content: judgeResponse, runId }])
+      setJudgeTextResponses((r) => [...r, { id: responseId, content: judgeResponse, runId }])
       const e = parseEvaluation(judgeResponse)
-      console.log("extracted evaluation result:", e)
-      console.log('Storing judge parsed response with runId:', runId, 'responseId:', responseId)
-      setJudgeParsedResponses(r => [...r, { id: responseId, ...e, runId }])
-      console.log("parsed eval", e)
-      const passed = 'score' in e && e.score === 0
-      console.log("Passed  ===>", passed)
-      if (onProgress) onProgress(`Evaluation: ${passed ? 'PASS' : 'FAIL'}`)
+      setJudgeParsedResponses((r) => [...r, { id: responseId, ...e, runId }])
+      addMessage(`Evaluation completed`, 'success', 'evaluation')
 
-      return passed
-
+      return e
     } catch (error) {
       console.error('Judge evaluation failed:', error)
       throw error // Re-throw to let caller handle logging
@@ -346,74 +386,116 @@ ${llmResponse}
    * @param {string} testModel - Model for generation
    * @param {string} judgeProvider - Provider for judge model
    * @param {string} judgeModel - Model for evaluation
+   * @param {string} judgeSystemPrompt - System prompt for judge
+   * @param {string} runId - Run identifier
    */
-  const batch = async (prompt, criteria, maxTry = 10, goal = 4, testProvider, testModel, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId) => {
+  const batch = async (
+    prompt,
+    criteria,
+    maxTry = 10,
+    goal = 4,
+    testProvider,
+    testModel,
+    judgeProvider,
+    judgeModel,
+    judgeSystemPrompt,
+    runId,
+  ) => {
     const controller = new AbortController()
     setAbortController(controller)
-    setAttempts(0)
-    setWins(0)
-    let localWin = 0
-    let localAttempts = 0
+    setScoreState({
+      attempts: 0,
+      wins: 0,
+      losses: 0,
+      parseFailures: 0,
+      criteriaStats: {},
+    })
 
-    if (onProgress) onProgress(`Starting batch: ${maxTry} attempts, goal ${goal} wins`)
+    addMessage(`Starting batch: ${maxTry} attempts, goal ${goal} wins`, 'info', 'batch')
 
     try {
-      while (localAttempts < maxTry && localWin < goal && !controller.signal.aborted) {
-        localAttempts++
-        if (onProgress) onProgress(`Attempt ${localAttempts}/${maxTry} - Starting...`)
+      let completed = 0
+      let wins = 0
 
-        try {
-          const res = await runTestModel(prompt, criteria, testProvider, testModel, judgeProvider, judgeModel,
-            (progressMsg) => onProgress && onProgress(`Attempt ${localAttempts}/${maxTry} - ${progressMsg}`), runId, judgeSystemPrompt)
+      // Create batches of concurrent runs
+      for (
+        let i = 0;
+        i < maxTry && wins < goal && !controller.signal.aborted;
+        i += CONCURRENT_RUN_LIMIT
+      ) {
+        const batchSize = Math.min(CONCURRENT_RUN_LIMIT, maxTry - i)
+        const runPromises = []
 
-          if (res) {
-            localWin++
-          }
-
-          if (onProgress) onProgress(`Attempt ${localAttempts}/${maxTry} - ${res ? 'PASS' : 'FAIL'} (${localWin}/${goal} wins)`)
-
-          setAttempts(localAttempts)
-          setWins(localWin)
-
-          // Check if goal reached
-          if (localWin >= goal) {
-            if (onProgress) onProgress(`🎉 Goal reached! ${localWin}/${goal} wins achieved in ${localAttempts} attempts`)
-            break
-          }
-
-        } catch (e) {
-          // Parsing failed - this counts as an attempt but not a win/loss
-          if (onProgress) onProgress(`Attempt ${localAttempts}/${maxTry} - PARSING FAILED: ${e.message}`)
-          setAttempts(localAttempts)
-          // Don't increment wins for failed parsing
+        for (let j = 0; j < batchSize; j++) {
+          const attemptRunId = runId
+          runPromises.push(
+            run(
+              prompt,
+              criteria,
+              testModel,
+              testProvider,
+              judgeModel,
+              judgeProvider,
+              judgeSystemPrompt,
+              attemptRunId,
+            ),
+          )
         }
 
-        await sleep(500)
-      }
+        const results = await Promise.allSettled(runPromises)
 
-      if (onProgress) {
-        if (controller.signal.aborted) {
-          onProgress('Batch cancelled by user')
-        } else {
-          // Analyze batch diversity
-          const batchAnalysis = analyzeBatchDiversity(runId)
-
-          if (batchAnalysis) {
-            const batchStatus = batchAnalysis.batchWin ? '🎉 SUCCESS' : '❌ FAILURE'
-            const diversityMsg = `${batchAnalysis.diverseCriteria}/${batchAnalysis.totalCriteria} criteria diverse`
-
-            if (localWin >= goal) {
-              onProgress(`${batchStatus} - Goal reached! ${localWin}/${goal} wins (${diversityMsg})`)
+        for (const result of results) {
+          completed++
+          if (result.status === 'fulfilled') {
+            const { evaluation, score, category } = result.value
+            // score() already called in run
+            if (category === 'win') {
+              wins++
+              addMessage(
+                `Attempt ${completed}/${maxTry} - SUCCESS! (${wins}/${goal} wins)`,
+                'success',
+                'batch',
+              )
             } else {
-              onProgress(`${batchStatus} - Completed: ${localWin} wins, ${localAttempts} attempts (${diversityMsg})`)
+              addMessage(
+                `Attempt ${completed}/${maxTry} - ${category.toUpperCase()} (${wins}/${goal} wins)`,
+                'info',
+                'batch',
+              )
             }
           } else {
-            if (localWin >= goal) {
-              onProgress(`🎉 Goal reached! ${localWin}/${goal} wins achieved in ${localAttempts} attempts`)
-            } else {
-              onProgress(`Batch completed: ${localWin} wins, ${localAttempts} attempts (goal not reached)`)
-            }
+            // Handle failed run
+            addMessage(
+              `Attempt ${completed}/${maxTry} - ERROR: ${result.reason.message}`,
+              'error',
+              'batch',
+            )
           }
+
+          if (wins >= goal) break
+        }
+
+        // Small delay between batches
+        if (i + CONCURRENT_RUN_LIMIT < maxTry) {
+          await sleep(100)
+        }
+      }
+
+      if (controller.signal.aborted) {
+        addMessage('Batch cancelled by user', 'warning', 'batch')
+      } else {
+        if (wins >= goal) {
+          addMessage(
+            `🎉 Goal reached! ${wins}/${goal} wins achieved in ${completed} attempts`,
+            'success',
+            'batch',
+          )
+        } else {
+          addMessage(
+            `Batch completed: ${wins} wins, ${completed} attempts (goal not reached)`,
+            'info',
+            'batch',
+          )
         }
       }
     } finally {
@@ -428,17 +510,20 @@ ${llmResponse}
     modelResponses,
     judgeParseResponses,
     judgeTextResponses,
-    wins,
-    attempts,
-    latestBatchResult,
+    scoreState,
     isSubmitting,
 
-    // Actions
+    // Core functions
+    generate,
+    evaluate: evaluateResponse,
+    score,
+
+    // High-level operations
+    run,
     batch,
     addManualResponse,
     cancelBatch,
     resetResults,
-    analyzeBatchDiversity,
   }
 }
 
