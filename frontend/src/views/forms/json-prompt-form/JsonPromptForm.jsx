@@ -43,7 +43,7 @@ const JsonPromptForm = () => {
     judgeTextResponses,
     wins,
     attempts,
-    batchResults,
+    latestBatchResult,
     isSubmitting,
 
     // Actions
@@ -78,15 +78,6 @@ const JsonPromptForm = () => {
     if (provider) setJudgeProvider(provider)
   }
 
-  const handleTestProviderChange = (provider) => {
-    setTestProvider(provider)
-    setTestModel('') // Reset model when provider changes
-  }
-
-  const handleJudgeProviderChange = (provider) => {
-    setJudgeProvider(provider)
-    setJudgeModel('') // Reset model when provider changes
-  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -170,8 +161,9 @@ const JsonPromptForm = () => {
         attempts={attempts}
         wins={wins}
         isSubmitting={isSubmitting}
-        batchResults={batchResults}
+        latestBatchResult={latestBatchResult}
       />
+      {console.log('JsonPromptForm latestBatchResult:', latestBatchResult)}
 
       <CRow>
         <CCol xs={12}>

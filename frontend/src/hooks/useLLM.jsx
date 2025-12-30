@@ -44,7 +44,7 @@ const useLLM = () => {
   const [judgeTextResponses, setJudgeTextResponses] = useState([])
   /** @type {Array<{id: string, gradingBasis: Object, score: number}>} Parsed evaluation results from judge responses with IDs */
   const [judgeParseResponses, setJudgeParsedResponses] = useState([])
-  const [batchResults, setBatchResults] = useState({}) // Store batch-level results
+  const [latestBatchResult, setLatestBatchResult] = useState(null) // Store latest batch result
   /** @type {number} Total number of attempts made in batch operations */
   const [attempts, setAttempts] = useState(0)
   /** @type {number} Number of successful evaluations (wins) */
@@ -112,10 +112,27 @@ const useLLM = () => {
    */
   // Analyze batch diversity criteria
   const analyzeBatchDiversity = (runId) => {
+    console.log('=== ANALYZING BATCH DIVERSITY ===')
+    console.log('Target runId:', runId)
+    console.log('Total judgeParseResponses:', judgeParseResponses.length)
+    console.log('judgeParseResponses:', judgeParseResponses)
+
+    // Debug: show all runIds in responses
+    const allRunIds = [...new Set(judgeParseResponses.map(r => r.runId))]
+    console.log('All runIds in responses:', allRunIds)
+
+    console.log('judgeParseResponses with matching runId:', judgeParseResponses.filter(r => r.runId === runId))
+
     // Get all parsed responses for this run
     const runResponses = judgeParseResponses.filter(r => r.runId === runId)
 
-    if (runResponses.length === 0) return null
+    if (runResponses.length === 0) {
+      console.log('❌ No responses found for runId:', runId)
+      console.log('Available responses:', judgeParseResponses.map(r => ({ id: r.id, runId: r.runId })))
+      return null
+    }
+
+    console.log('✅ Found', runResponses.length, 'responses for batch analysis')
 
     // Get grading basis from first response to know criteria names
     const firstResponse = runResponses[0]
@@ -148,11 +165,12 @@ const useLLM = () => {
       criteriaDetails: criteriaNames.map(name => ({
         name,
         hasDiversity: runResponses.some(r => r.gradingBasis[name] === 'PASS') &&
-                     runResponses.some(r => r.gradingBasis[name] === 'FAIL')
+          runResponses.some(r => r.gradingBasis[name] === 'FAIL')
       }))
     }
 
-    setBatchResults(prev => ({ ...prev, [runId]: batchResult }))
+    console.log('Setting latest batch result:', batchResult)
+    setLatestBatchResult(batchResult)
     return batchResult
   }
 
@@ -160,7 +178,7 @@ const useLLM = () => {
     setModelResponses([])
     setJudgeTextResponses([])
     setJudgeParsedResponses([])
-    setBatchResults({})
+    setLatestBatchResult(null)
     setAttempts(0)
     setWins(0)
   }
@@ -201,9 +219,8 @@ const useLLM = () => {
       if (onProgress) onProgress(`Response generated (${llmResponse.length} chars)`)
 
       const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-      // Always store the response, even if empty
       setModelResponses((responses) => {
+        console.log('Storing model response with runId:', runId, 'responseId:', responseId)
         return [...responses, { id: responseId, content: llmResponse, runId }]
       })
 
@@ -297,11 +314,15 @@ ${llmResponse}
       const response = await llmApi.generateResponseWithMessages(messages, { ...JUDGE_MODEL, model: judgeModel, provider: judgeProvider })
       const judgeResponse = response.data.response
 
+      console.log('Storing judge response with runId:', runId, 'responseId:', responseId)
       setJudgeTextResponses(r => [...r, { id: responseId, content: judgeResponse, runId }])
       const e = parseEvaluation(judgeResponse)
+      console.log("extracted evaluation result:", e)
+      console.log('Storing judge parsed response with runId:', runId, 'responseId:', responseId)
       setJudgeParsedResponses(r => [...r, { id: responseId, ...e, runId }])
-
-      const passed = e.score > 0
+      console.log("parsed eval", e)
+      const passed = 'score' in e && e.score === 0
+      console.log("Passed  ===>", passed)
       if (onProgress) onProgress(`Evaluation: ${passed ? 'PASS' : 'FAIL'}`)
 
       return passed
@@ -409,7 +430,7 @@ ${llmResponse}
     judgeTextResponses,
     wins,
     attempts,
-    batchResults,
+    latestBatchResult,
     isSubmitting,
 
     // Actions

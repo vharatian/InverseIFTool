@@ -1,9 +1,10 @@
+import React, { useEffect, useState } from 'react'
 import {
+  CProgress,
   CCard,
   CCardBody,
   CCardHeader,
   CCol,
-  CProgress,
   CRow,
 } from '@coreui/react'
 import PropTypes from 'prop-types'
@@ -14,19 +15,18 @@ import PropTypes from 'prop-types'
  * @param {number} props.attempts - Total number of attempts made
  * @param {number} props.wins - Number of successful evaluations
  * @param {boolean} props.isSubmitting - Whether a batch is currently running
- * @param {Object} props.batchResults - Batch-level analysis results
+ * @param {Object} props.latestBatchResult - Latest batch analysis result
  */
 const Scoreboard = ({
   attempts,
   wins,
   isSubmitting,
-  batchResults,
+  latestBatchResult,
 }) => {
+  console.log('Scoreboard: latestBatchResult:', latestBatchResult)
+
   const winRate = attempts > 0 ? Math.round((wins / attempts) * 100) : 0
   const lossRate = attempts > 0 ? 100 - winRate : 0
-
-  // Get the latest batch result
-  const latestBatchResult = batchResults && Object.values(batchResults).pop()
 
   return (
     <CRow className="mb-4">
@@ -125,7 +125,14 @@ Scoreboard.propTypes = {
   attempts: PropTypes.number,
   wins: PropTypes.number,
   isSubmitting: PropTypes.bool,
-  batchResults: PropTypes.object,
+  latestBatchResult: PropTypes.shape({
+    runId: PropTypes.string,
+    totalCriteria: PropTypes.number,
+    diverseCriteria: PropTypes.number,
+    requiredDiversity: PropTypes.number,
+    batchWin: PropTypes.bool,
+    criteriaDetails: PropTypes.array,
+  }),
 }
 
 export default Scoreboard
