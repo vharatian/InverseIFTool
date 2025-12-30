@@ -1,12 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import {
-  CButton,
-  CCard,
-  CCardBody,
-  CCardHeader,
-  CCol,
-  CRow,
-} from '@coreui/react'
+import { CButton, CCard, CCardBody, CCardHeader, CCol, CRow } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilTrash, cilTerminal } from '@coreui/icons'
 import PropTypes from 'prop-types'
@@ -18,27 +11,29 @@ import { useLog } from '../../../contexts/LogContext'
  * @param {boolean} props.configLoading - Whether LLM configurations are loading
  * @param {Array} props.llmConfigs - Array of LLM provider configurations
  */
-const ActivityConsole = ({
-  configLoading,
-  llmConfigs,
-}) => {
+const ActivityConsole = ({ configLoading, llmConfigs }) => {
   const { messages, clearMessages } = useLog()
   const [isExpanded, setIsExpanded] = useState(false)
 
   // Auto-expand when new messages arrive
   useEffect(() => {
-    if (messages && messages.length > 0) {
+    if (messages && messages.length > 0 && !isExpanded) {
       setIsExpanded(true)
     }
-  }, [messages])
+  }, [messages, isExpanded])
 
   const getMessageColor = (type) => {
     switch (type) {
-      case 'error': return 'text-danger'
-      case 'success': return 'text-success'
-      case 'warning': return 'text-warning'
-      case 'info': return 'text-info'
-      default: return 'text-muted'
+      case 'error':
+        return 'text-danger'
+      case 'success':
+        return 'text-success'
+      case 'warning':
+        return 'text-warning'
+      case 'info':
+        return 'text-info'
+      default:
+        return 'text-muted'
     }
   }
 
@@ -70,7 +65,9 @@ const ActivityConsole = ({
             <div className="d-flex align-items-center">
               <CIcon icon={cilTerminal} className="me-2" />
               <strong>Activity Console</strong>
-              <span className={`badge ms-2 ${statusMessage.type === 'success' ? 'bg-success' : statusMessage.type === 'warning' ? 'bg-warning' : statusMessage.type === 'error' ? 'bg-danger' : 'bg-info'}`}>
+              <span
+                className={`badge ms-2 ${statusMessage.type === 'success' ? 'bg-success' : statusMessage.type === 'warning' ? 'bg-warning' : statusMessage.type === 'error' ? 'bg-danger' : 'bg-info'}`}
+              >
                 {statusMessage.text}
               </span>
             </div>
@@ -107,15 +104,13 @@ const ActivityConsole = ({
                   backgroundColor: '#f8f9fa',
                   border: '1px solid #dee2e6',
                   borderRadius: '0.25rem',
-                  padding: '1rem'
+                  padding: '1rem',
                 }}
               >
                 {messages && messages.length > 0 ? (
                   messages.map((message, index) => (
                     <div key={index} className="mb-2">
-                      <span className="text-muted">
-                        [{formatTimestamp(message.timestamp)}]
-                      </span>
+                      <span className="text-muted">[{formatTimestamp(message.timestamp)}]</span>
                       <span className={`ms-2 ${getMessageColor(message.type)}`}>
                         {message.content}
                       </span>
@@ -137,10 +132,12 @@ const ActivityConsole = ({
 
 ActivityConsole.propTypes = {
   configLoading: PropTypes.bool,
-  llmConfigs: PropTypes.arrayOf(PropTypes.shape({
-    provider: PropTypes.string,
-    isActive: PropTypes.bool,
-  })),
+  llmConfigs: PropTypes.arrayOf(
+    PropTypes.shape({
+      provider: PropTypes.string,
+      isActive: PropTypes.bool,
+    }),
+  ),
 }
 
 export default ActivityConsole

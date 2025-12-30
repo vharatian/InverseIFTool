@@ -5,7 +5,7 @@ class OpenAIClient {
     // Get API key from environment variables
     let apiKey = config.apiKey
     if (!apiKey) {
-      throw ("no apikey fount")
+      throw 'no apikey fount'
     }
 
     this.client = new OpenAI({
@@ -13,13 +13,13 @@ class OpenAIClient {
       organization: config.organization,
       project: config.project,
       ...config.clientOptions,
-      dangerouslyAllowBrowser: true
+      dangerouslyAllowBrowser: true,
     })
 
     this.defaultOptions = {
       model: config.model || 'gpt-4o-mini',
       temperature: config.temperature || 0.7,
-      max_tokens: config.maxTokens || 1000,
+      max_tokens: config.maxTokens,
       ...config.defaultOptions,
     }
   }
@@ -67,7 +67,7 @@ class OpenAIClient {
         ...this.defaultOptions,
         model: config.model || this.defaultOptions.model,
         temperature: config.temperature || this.defaultOptions.temperature,
-        max_tokens: config.maxTokens || this.defaultOptions.max_tokens,
+        max_tokens: config.maxTokens,
         ...config.defaultOptions,
       }
     }

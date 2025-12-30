@@ -9,9 +9,11 @@ import {
   CChartRadar,
 } from '@coreui/react-chartjs'
 import { DocsLink } from 'src/components'
+import { useMemo } from 'react'
 
 const Charts = () => {
-  const random = () => Math.round(Math.random() * 100)
+  const randomData1 = [65, 45, 78, 23, 89, 12, 67]
+  const randomData2 = [45, 67, 23, 89, 34, 78, 56]
 
   return (
     <CRow>
@@ -54,7 +56,7 @@ const Charts = () => {
                     borderColor: 'rgba(220, 220, 220, 1)',
                     pointBackgroundColor: 'rgba(220, 220, 220, 1)',
                     pointBorderColor: '#fff',
-                    data: [random(), random(), random(), random(), random(), random(), random()],
+                    data: randomData1,
                   },
                   {
                     label: 'My Second dataset',
@@ -62,7 +64,7 @@ const Charts = () => {
                     borderColor: 'rgba(151, 187, 205, 1)',
                     pointBackgroundColor: 'rgba(151, 187, 205, 1)',
                     pointBorderColor: '#fff',
-                    data: [random(), random(), random(), random(), random(), random(), random()],
+                    data: randomData2,
                   },
                 ],
               }}

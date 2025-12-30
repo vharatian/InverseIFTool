@@ -29,9 +29,7 @@ const JsonPromptForm = () => {
   const {
     llmConfigs,
     configLoading,
-    modelResponses,
-    judgeParseResponses,
-    judgeTextResponses,
+    runContext,
     scoreState,
     isSubmitting,
     generate,
@@ -148,11 +146,7 @@ const JsonPromptForm = () => {
     }
   }
 
-  useEffect(() => {
-    console.log('model responses changed', modelResponses)
-    console.log('judge text responses changed', judgeTextResponses)
-    console.log('judge parsed responses changed', judgeParseResponses)
-  }, [modelResponses, judgeParseResponses, judgeTextResponses])
+  useEffect(() => {}, [runContext])
 
   useEffect(() => {
     if (llmConfigs && llmConfigs.length > 0 && !configLoading) {
@@ -180,13 +174,13 @@ const JsonPromptForm = () => {
         }
       }
     }
-  }, [llmConfigs, configLoading, testModel, judgeModel])
+  }, [llmConfigs, configLoading])
 
   useEffect(() => {
     if (configLoading) {
       addMessage('Loading LLM configuration...', 'info', 'config')
     }
-  }, [configLoading])
+  }, [configLoading, addMessage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -268,12 +262,7 @@ const JsonPromptForm = () => {
         </CCol>
       </CRow>
 
-      <ResultsAccordion
-        key={modelResponses.length}
-        modelResponses={modelResponses}
-        judgeParseResponses={judgeParseResponses}
-        judgeTextResponses={judgeTextResponses}
-      />
+      <ResultsAccordion key={runContext.length} runContext={runContext} />
     </>
   )
 }

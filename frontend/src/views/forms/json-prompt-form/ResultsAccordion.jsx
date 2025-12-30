@@ -20,27 +20,15 @@ import PropTypes from 'prop-types'
 /**
  * Component for displaying model responses and evaluations in an accordion
  * @param {Object} props - Component props
- * @param {Array<{id: string, content: string}>} props.modelResponses - Array of model response objects with id and content
- * @param {Array<{id: string, gradingBasis: Object, score: number}>} props.judgeParseResponses - Array of parsed judge responses with id
- * @param {Array<{id: string, content: string}>} props.judgeTextResponses - Array of raw judge response objects with id
+ * @param {Array<{id: string, runId: string, status?: 'generating' | 'evaluating' | 'parsing' | 'scoring' | 'completed' | 'error', modelContent?: string, judgeText?: string, gradingBasis?: Object, score?: number, json?: any, explanation?: string}>} props.runContext - Array of flattened run context objects containing all response data
  */
-const ResultsAccordion = ({ modelResponses, judgeParseResponses, judgeTextResponses }) => {
+const ResultsAccordion = ({ runContext }) => {
   const [copiedItems, setCopiedItems] = useState(new Set())
 
-  const combinedResponses = useMemo(() => {
-    if (!modelResponses || modelResponses.length === 0) return []
-    return modelResponses.map((res) => ({
-      res,
-      judgeParsed: judgeParseResponses.find((j) => j.id === res.id),
-      judgeText: judgeTextResponses.find((j) => j.id === res.id),
-    }))
-  }, [modelResponses, judgeParseResponses, judgeTextResponses])
+  // Filter to only show contexts that have model responses
+  const filteredRunContext = runContext.filter((context) => context.modelContent)
 
-  useEffect(() => {
-    // Update combined responses when any response arrays change
-  }, [judgeParseResponses, judgeTextResponses, modelResponses])
-
-  if (combinedResponses.length === 0) {
+  if (filteredRunContext.length === 0) {
     return null
   }
 
@@ -88,30 +76,48 @@ const ResultsAccordion = ({ modelResponses, judgeParseResponses, judgeTextRespon
   return (
     <CRow>
       <CAccordion activeItemKey={1} className="mb-5">
-        {combinedResponses.map(({ res, judgeParsed, judgeText }, index) => {
+        {filteredRunContext.map((context, index) => {
           return (
-            <CAccordionItem itemKey={index + 1} key={res.id}>
+            <CAccordionItem itemKey={index + 1} key={context.id}>
               <CAccordionHeader>
-                <strong style={{ marginRight: '10px' }}>{getReadableId(res, index)}</strong>
-                {judgeParsed && judgeParsed.gradingBasis ? (
-                  Object.keys(judgeParsed.gradingBasis).map((key) => (
+                <strong style={{ marginRight: '10px' }}>
+                  {getReadableId({ id: context.id, runId: context.runId }, index)}
+                </strong>
+                <CBadge
+                  style={{ marginRight: '10px' }}
+                  color={
+                    context.status === 'completed'
+                      ? 'success'
+                      : context.status === 'error'
+                        ? 'danger'
+                        : context.status === 'generating'
+                          ? 'primary'
+                          : context.status === 'evaluating'
+                            ? 'warning'
+                            : context.status === 'parsing'
+                              ? 'info'
+                              : context.status === 'scoring'
+                                ? 'secondary'
+                                : 'light'
+                  }
+                >
+                  {context.status || 'unknown'}
+                </CBadge>
+                {context.gradingBasis &&
+                  Object.keys(context.gradingBasis).map((key) => (
                     <CBadge
                       key={key}
                       style={{ marginRight: '10px' }}
-                      color={judgeParsed.gradingBasis[key] !== 'FAIL' ? 'success' : 'danger'}
+                      color={context.gradingBasis[key] !== 'FAIL' ? 'success' : 'danger'}
                     >
                       {key}
-                    </CBadge>
-                  ))
-                ) : (
-                  <CBadge style={{ marginRight: '10px' }} color="danger">
-                    Judge Failed
-                  </CBadge>
-                )}
-                {judgeParsed && judgeParsed.score != undefined && (
+                    </CBadge>)
+                  )
+                }
+                {context.score != undefined && (
                   <CBadge
                     style={{ marginRight: '10px' }}
-                    color={judgeParsed.score !== 0 ? 'success' : 'danger'}
+                    color={context.score !== 0 ? 'success' : 'danger'}
                   >
                     score
                   </CBadge>
@@ -121,7 +127,7 @@ const ResultsAccordion = ({ modelResponses, judgeParseResponses, judgeTextRespon
                 <CTabs defaultActiveItemKey="response">
                   <CTabList variant="tabs">
                     <CTab itemKey="response">Response</CTab>
-                    <CTab itemKey="evaluation" disabled={!judgeText}>
+                    <CTab itemKey="evaluation" disabled={!context.judgeText}>
                       Evaluation
                     </CTab>
                   </CTabList>
@@ -133,16 +139,20 @@ const ResultsAccordion = ({ modelResponses, judgeParseResponses, judgeTextRespon
                         </div>
                         <CButton
                           size="sm"
-                          color={copiedItems.has(`${res.id}-response`) ? 'success' : 'secondary'}
-                          onClick={() => copyToClipboard(res.content, res.id, 'response')}
+                          color={
+                            copiedItems.has(`${context.id}-response`) ? 'success' : 'secondary'
+                          }
+                          onClick={() =>
+                            copyToClipboard(context.modelContent, context.id, 'response')
+                          }
                           title="Copy response to clipboard"
                         >
                           <CIcon icon={cilCopy} size="sm" className="me-1" />
-                          {copiedItems.has(`${res.id}-response`) ? 'Copied!' : 'Copy'}
+                          {copiedItems.has(`${context.id}-response`) ? 'Copied!' : 'Copy'}
                         </CButton>
                       </div>
                       <div style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
-                        {res.content}
+                        {context.modelContent}
                       </div>
                     </CTabPanel>
                     <CTabPanel className="p-3" itemKey="evaluation">
@@ -152,19 +162,21 @@ const ResultsAccordion = ({ modelResponses, judgeParseResponses, judgeTextRespon
                         </div>
                         <CButton
                           size="sm"
-                          color={copiedItems.has(`${res.id}-evaluation`) ? 'success' : 'secondary'}
-                          onClick={() =>
-                            copyToClipboard(judgeText?.content || '', res.id, 'evaluation')
+                          color={
+                            copiedItems.has(`${context.id}-evaluation`) ? 'success' : 'secondary'
                           }
-                          disabled={!judgeText}
+                          onClick={() =>
+                            copyToClipboard(context.judgeText || '', context.id, 'evaluation')
+                          }
+                          disabled={!context.judgeText}
                           title="Copy evaluation to clipboard"
                         >
                           <CIcon icon={cilCopy} size="sm" className="me-1" />
-                          {copiedItems.has(`${res.id}-evaluation`) ? 'Copied!' : 'Copy'}
+                          {copiedItems.has(`${context.id}-evaluation`) ? 'Copied!' : 'Copy'}
                         </CButton>
                       </div>
                       <div style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
-                        {judgeText?.content || 'No evaluation available'}
+                        {context.judgeText || 'No evaluation available'}
                       </div>
                     </CTabPanel>
                   </CTabContent>
@@ -179,28 +191,26 @@ const ResultsAccordion = ({ modelResponses, judgeParseResponses, judgeTextRespon
 }
 
 ResultsAccordion.propTypes = {
-  modelResponses: PropTypes.arrayOf(
+  runContext: PropTypes.arrayOf(
     PropTypes.shape({
       id: PropTypes.string.isRequired,
-      content: PropTypes.string.isRequired,
-      runId: PropTypes.string,
-    }),
-  ),
-  judgeParseResponses: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.string.isRequired,
+      runId: PropTypes.string.isRequired,
+      status: PropTypes.oneOf([
+        'generating',
+        'evaluating',
+        'parsing',
+        'scoring',
+        'completed',
+        'error',
+      ]),
+      modelContent: PropTypes.string,
+      judgeText: PropTypes.string,
       gradingBasis: PropTypes.object,
       score: PropTypes.number,
-      runId: PropTypes.string,
+      json: PropTypes.any,
+      explanation: PropTypes.string,
     }),
-  ),
-  judgeTextResponses: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.string.isRequired,
-      content: PropTypes.string.isRequired,
-      runId: PropTypes.string,
-    }),
-  ),
+  ).isRequired,
 }
 
 export default ResultsAccordion

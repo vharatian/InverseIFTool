@@ -32,7 +32,6 @@ export class LlmService {
     this.defaultOptions = {
       model: providerConfig.defaultModel || 'gpt-4o-mini',
       temperature: 0.7,
-      max_tokens: 1000,
     };
 
     // Configure based on sdk type
@@ -86,8 +85,19 @@ export class LlmService {
    * @returns Promise<string> - The LLM response
    */
   async generateResponse(prompt: string, options: any = {}): Promise<string> {
+    const startTime = Date.now();
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const model = options.model || this.defaultOptions.model;
     const provider = options.provider;
+
+    console.log(`[LLM Service] ${requestId} Starting generation request:`, {
+      provider,
+      model,
+      promptLength: prompt?.length || 0,
+      promptPreview: prompt?.substring(0, 200) + (prompt?.length > 200 ? '...' : ''),
+      options: { ...options, provider: '[REDACTED]' },
+      timestamp: new Date().toISOString(),
+    });
 
     if (!provider) {
       throw new Error('Provider must be specified in options');
@@ -111,26 +121,25 @@ export class LlmService {
       this.currentProvider.id !== providerConfig.id
     ) {
       console.log(
-        `[LLM Service] Configuring provider: ${providerConfig.provider}`,
+        `[LLM Service] ${requestId} Configuring provider: ${providerConfig.provider}`,
       );
       this.configureProvider(providerConfig);
     }
 
     if (!this.client) {
-      console.error(`[LLM Service] Client not configured after provider setup`);
+      console.error(`[LLM Service] ${requestId} Client not configured after provider setup`);
       throw new Error(
         'LLM provider not configured. Please call configureProvider() first.',
       );
     }
 
     if (!prompt || typeof prompt !== 'string') {
-      console.error(`[LLM Service] Invalid prompt:`, {
+      console.error(`[LLM Service] ${requestId} Invalid prompt:`, {
         prompt,
         type: typeof prompt,
       });
       throw new Error('Prompt is required and must be a string');
     }
-
 
     const completionOptions = {
       ...this.defaultOptions,
@@ -148,14 +157,37 @@ export class LlmService {
 
       switch (this.providerType) {
         case 'openai': {
+          console.log(`[LLM Service] ${requestId} Sending to OpenAI:`, {
+            model,
+            messagesCount: completionOptions.messages.length,
+            temperature: completionOptions.temperature,
+            maxTokens: completionOptions.max_tokens,
+          });
+
           const completion =
             await this.client.chat.completions.create(completionOptions);
 
           response = completion.choices[0]?.message?.content || '';
+          const finishReason = completion.choices[0]?.finish_reason;
+
+          const duration = Date.now() - startTime;
+          console.log(`[LLM Service] ${requestId} OpenAI response received:`, {
+            responseLength: response.length,
+            duration: `${duration}ms`,
+            isEmpty: response.length === 0,
+            finishReason,
+            model,
+            usage: completion.usage ? {
+              promptTokens: completion.usage.prompt_tokens,
+              completionTokens: completion.usage.completion_tokens,
+              totalTokens: completion.usage.total_tokens,
+            } : undefined,
+            timestamp: new Date().toISOString(),
+          });
 
           if (!response) {
             console.warn(
-              `[LLM Service] OpenAI returned empty response for ${model}`,
+              `[LLM Service] ${requestId} OpenAI returned empty response for ${model}`,
             );
           }
 
@@ -167,7 +199,14 @@ export class LlmService {
 
       return response;
     } catch (error) {
-      console.error(`[LLM Service] API call failed: ${error.message}`);
+      const duration = Date.now() - startTime;
+      console.error(`[LLM Service] ${requestId} API call failed after ${duration}ms:`, {
+        error: error.message,
+        provider,
+        model,
+        stack: error.stack?.split('\n')[0], // First line of stack trace
+        timestamp: new Date().toISOString(),
+      });
       throw new Error(`Failed to get LLM response: ${error.message}`);
     }
   }
@@ -182,7 +221,38 @@ export class LlmService {
     messages: any[],
     options: any = {},
   ): Promise<string> {
+    const startTime = Date.now();
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const provider = options.provider;
+
+    // Log incoming request with message details
+    console.log(`[LLM Service] ${requestId} Starting messages request:`, {
+      provider: provider || this.currentProvider?.provider,
+      messagesCount: messages?.length || 0,
+      hasSystemMessage: messages?.some(m => m.role === 'system') || false,
+      options: { ...options, provider: '[REDACTED]' },
+      timestamp: new Date().toISOString(),
+    });
+
+    // Log system message if present
+    const systemMessage = messages?.find(m => m.role === 'system');
+    if (systemMessage) {
+      console.log(`[LLM Service] ${requestId} System message:`, {
+        length: systemMessage.content?.length || 0,
+        preview: systemMessage.content?.substring(0, 300) + (systemMessage.content?.length > 300 ? '...' : ''),
+      });
+    }
+
+    // Log user message content (truncated for readability)
+    const userMessages = messages?.filter(m => m.role === 'user') || [];
+    if (userMessages.length > 0) {
+      console.log(`[LLM Service] ${requestId} User messages:`, {
+        count: userMessages.length,
+        totalLength: userMessages.reduce((sum, m) => sum + (m.content?.length || 0), 0),
+        preview: userMessages[0].content?.substring(0, 500) + (userMessages[0].content?.length > 500 ? '...' : ''),
+      });
+    }
+
     if (provider) {
       const providerConfig = this.getConfigByProvider(provider);
       if (providerConfig) {
@@ -191,19 +261,23 @@ export class LlmService {
           !this.currentProvider ||
           this.currentProvider.id !== providerConfig.id
         ) {
+          console.log(
+            `[LLM Service] ${requestId} Reconfiguring provider: ${providerConfig.provider}`,
+          );
           this.configureProvider(providerConfig);
         }
       }
     }
 
     if (!this.client) {
+      console.error(`[LLM Service] ${requestId} Client not configured`);
       throw new Error(
         'LLM provider not configured. Please call configureProvider() first.',
       );
     }
 
     if (!Array.isArray(messages) || messages.length === 0) {
-      console.error(`[LLM Service] Invalid messages array:`, {
+      console.error(`[LLM Service] ${requestId} Invalid messages array:`, {
         messages,
         isArray: Array.isArray(messages),
       });
@@ -224,14 +298,38 @@ export class LlmService {
 
       switch (this.providerType) {
         case 'openai': {
+          console.log(`[LLM Service] ${requestId} Sending messages to OpenAI:`, {
+            model: completionOptions.model,
+            messagesCount: completionOptions.messages.length,
+            temperature: completionOptions.temperature,
+            maxTokens: completionOptions.max_tokens,
+          });
+
           const completion =
             await this.client.chat.completions.create(completionOptions);
 
           response = completion.choices[0]?.message?.content || '';
+          const finishReason = completion.choices[0]?.finish_reason;
+
+          const duration = Date.now() - startTime;
+          console.log(`[LLM Service] ${requestId} OpenAI response received:`, {
+            responseLength: response.length,
+            duration: `${duration}ms`,
+            isEmpty: response.length === 0,
+            finishReason,
+            model: completionOptions.model,
+            usage: completion.usage ? {
+              promptTokens: completion.usage.prompt_tokens,
+              completionTokens: completion.usage.completion_tokens,
+              totalTokens: completion.usage.total_tokens,
+            } : undefined,
+            responsePreview: response.substring(0, 200) + (response.length > 200 ? '...' : ''),
+            timestamp: new Date().toISOString(),
+          });
 
           if (!response) {
             console.warn(
-              `[LLM Service] OpenAI returned empty response for evaluation`,
+              `[LLM Service] ${requestId} OpenAI returned empty response for evaluation`,
             );
           }
 
@@ -243,7 +341,14 @@ export class LlmService {
 
       return response;
     } catch (error) {
-      console.error(`[LLM Service] Messages API call failed: ${error.message}`);
+      const duration = Date.now() - startTime;
+      console.error(`[LLM Service] ${requestId} Messages API call failed after ${duration}ms:`, {
+        error: error.message,
+        provider: this.currentProvider?.provider,
+        messagesCount: messages.length,
+        stack: error.stack?.split('\n')[0], // First line of stack trace
+        timestamp: new Date().toISOString(),
+      });
       throw new Error(`Failed to get LLM response: ${error.message}`);
     }
   }

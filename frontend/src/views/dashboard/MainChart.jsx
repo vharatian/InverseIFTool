@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 
 import { CChartLine } from '@coreui/react-chartjs'
 import { getStyle } from '@coreui/utils'
+import { useMemo } from 'react'
 
 const MainChart = () => {
   const chartRef = useRef(null)
@@ -30,7 +31,8 @@ const MainChart = () => {
       document.documentElement.removeEventListener('ColorSchemeChange', handleColorSchemeChange)
   }, [chartRef])
 
-  const random = (min = 0, max = 100) => Math.floor(Math.random() * (max - min + 1)) + min
+  const randomData1 = [120, 85, 150, 95, 180, 75, 135]
+  const randomData2 = [95, 135, 75, 180, 105, 150, 90]
 
   return (
     <>
@@ -46,15 +48,7 @@ const MainChart = () => {
               borderColor: getStyle('--cui-info'),
               pointHoverBackgroundColor: getStyle('--cui-info'),
               borderWidth: 2,
-              data: [
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-              ],
+              data: randomData1,
               fill: true,
             },
             {
@@ -63,15 +57,7 @@ const MainChart = () => {
               borderColor: getStyle('--cui-success'),
               pointHoverBackgroundColor: getStyle('--cui-success'),
               borderWidth: 2,
-              data: [
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-                random(50, 200),
-              ],
+              data: randomData2,
             },
             {
               label: 'My Third dataset',

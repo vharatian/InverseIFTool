@@ -167,8 +167,7 @@ export const llmApi = {
    * @param {number} [options.max_tokens] - Maximum tokens to generate
    * @returns {Promise<AxiosResponse<{response: string}>>} Generated response
    */
-  generateResponse: (prompt, options) =>
-    api.post('/llm/generate', { prompt, options }),
+  generateResponse: (prompt, options) => api.post('/llm/generate', { prompt, options }),
 
   /**
    * Generate a response using a messages array (chat format)

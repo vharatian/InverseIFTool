@@ -52,10 +52,10 @@ export const LogProvider = ({ children, maxMessages = 100 }) => {
       timestamp: Date.now(),
       type,
       content,
-      source: source || 'system'
+      source: source || 'system',
     }
 
-    setMessages(prev => {
+    setMessages((prev) => {
       const newMessages = [...prev, message]
       // Keep only the last maxMessages messages
       return newMessages.slice(-maxMessages)
@@ -76,7 +76,7 @@ export const LogProvider = ({ children, maxMessages = 100 }) => {
    */
   const getMessagesByType = (types) => {
     if (!types || types.length === 0) return messages
-    return messages.filter(msg => types.includes(msg.type))
+    return messages.filter((msg) => types.includes(msg.type))
   }
 
   /**
@@ -85,7 +85,7 @@ export const LogProvider = ({ children, maxMessages = 100 }) => {
    * @returns {LogMessage[]} Messages from the source
    */
   const getMessagesBySource = (source) => {
-    return messages.filter(msg => msg.source === source)
+    return messages.filter((msg) => msg.source === source)
   }
 
   const value = {
@@ -94,17 +94,13 @@ export const LogProvider = ({ children, maxMessages = 100 }) => {
     clearMessages,
     getMessagesByType,
     getMessagesBySource,
-    maxMessages
+    maxMessages,
   }
 
-  return (
-    <LogContext.Provider value={value}>
-      {children}
-    </LogContext.Provider>
-  )
+  return <LogContext.Provider value={value}>{children}</LogContext.Provider>
 }
 
 LogProvider.propTypes = {
   children: PropTypes.node.isRequired,
-  maxMessages: PropTypes.number
+  maxMessages: PropTypes.number,
 }

@@ -6,7 +6,12 @@ import PropTypes from 'prop-types'
  * Component for displaying batch run statistics and scoreboard
  * @param {Object} props - Component props
  * @param {boolean} props.isSubmitting - Whether a batch is currently running
- * @param {Object} props.scoreState - Score state with batch result
+ * @param {Object} props.scoreState - Score state with batch statistics
+ * @param {number} props.scoreState.attempts - Total number of attempts
+ * @param {number} props.scoreState.wins - Number of successful runs
+ * @param {number} props.scoreState.losses - Number of failed runs
+ * @param {number} props.scoreState.failures - Number of evaluation failures
+ * @param {Object} props.scoreState.criteriaStats - Statistics for each evaluation criteria
  */
 const Scoreboard = ({ isSubmitting, scoreState }) => {
   const winRate =
@@ -84,10 +89,8 @@ const Scoreboard = ({ isSubmitting, scoreState }) => {
                         <span>{requiredDiversity}+ criteria</span>
                       </div>
                       <div className="d-flex justify-content-between align-items-center mb-2">
-                        <span>Parse Failures:</span>
-                        <span className="fw-bold text-warning">
-                          {scoreState.parseFailures || 0}
-                        </span>
+                        <span>Failures:</span>
+                        <span className="fw-bold text-warning">{scoreState.failures || 0}</span>
                       </div>
                       <div className="d-flex justify-content-between align-items-center">
                         <span>Batch Result:</span>
@@ -123,7 +126,7 @@ Scoreboard.propTypes = {
     attempts: PropTypes.number,
     wins: PropTypes.number,
     losses: PropTypes.number,
-    parseFailures: PropTypes.number,
+    failures: PropTypes.number,
     criteriaStats: PropTypes.object,
   }),
 }

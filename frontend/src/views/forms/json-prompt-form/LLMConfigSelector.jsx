@@ -1,10 +1,4 @@
-
-import {
-  CCol,
-  CFormLabel,
-  CFormSelect,
-  CRow,
-} from '@coreui/react'
+import { CCol, CFormLabel, CFormSelect, CRow } from '@coreui/react'
 import PropTypes from 'prop-types'
 
 /**
@@ -27,13 +21,14 @@ const LLMConfigSelector = ({
   onJudgeModelChange,
 }) => {
   // Create a flat list of all available models with their provider info
-  const allModels = llmConfigs?.flatMap(config =>
-    config.models.map(model => ({
-      model,
-      provider: config.provider,
-      displayName: `${model} (${config.provider})`
-    }))
-  ) || []
+  const allModels =
+    llmConfigs?.flatMap((config) =>
+      config.models.map((model) => ({
+        model,
+        provider: config.provider,
+        displayName: `${model} (${config.provider})`,
+      })),
+    ) || []
 
   return (
     <CRow>
@@ -78,10 +73,12 @@ const LLMConfigSelector = ({
 }
 
 LLMConfigSelector.propTypes = {
-  llmConfigs: PropTypes.arrayOf(PropTypes.shape({
-    provider: PropTypes.string,
-    models: PropTypes.arrayOf(PropTypes.string),
-  })),
+  llmConfigs: PropTypes.arrayOf(
+    PropTypes.shape({
+      provider: PropTypes.string,
+      models: PropTypes.arrayOf(PropTypes.string),
+    }),
+  ),
   configLoading: PropTypes.bool,
   testModel: PropTypes.string,
   judgeModel: PropTypes.string,

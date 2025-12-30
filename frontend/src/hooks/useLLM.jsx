@@ -30,10 +30,25 @@ const JUDGE_MODEL = {
 const CONCURRENT_RUN_LIMIT = 5
 
 /**
- * Custom hook for LLM operations including model testing, evaluation, and batch processing
- * Manages state for LLM configurations, responses, and evaluation results
- * @param {Function} addMessage - Function to add messages to UI
- * @returns {Object} Hook interface with state and actions
+ * Custom hook for LLM operations including model testing, evaluation, and batch processing.
+ * Manages state for LLM configurations, responses, and evaluation results.
+ * Provides functions for generating responses, evaluating them against criteria, and running batch tests.
+ * @param {Function} addMessage - Function to add messages to the UI (signature: (message: string, type: string, category: string) => void)
+ * @returns {{
+ *   llmConfigs: Array,
+ *   configLoading: boolean,
+ *   runContext: Array<{id: string, runId: string, status?: 'generating' | 'evaluating' | 'parsing' | 'scoring' | 'completed' | 'error', modelContent?: string, judgeText?: string, gradingBasis?: Object, score?: number, json?: any, explanation?: string}>,
+ *   scoreState: {attempts: number, wins: number, losses: number, failures: number, criteriaStats: Object},
+ *   isSubmitting: boolean,
+ *   generate: Function,
+ *   evaluate: Function,
+ *   score: Function,
+ *   run: Function,
+ *   batch: Function,
+ *   addManualResponse: Function,
+ *   cancelBatch: Function,
+ *   resetResults: Function
+ * }} Hook interface with state and actions
  */
 const useLLM = (addMessage) => {
   // State management
@@ -41,24 +56,17 @@ const useLLM = (addMessage) => {
   const [llmConfigs, setLlmConfigs] = useState([])
   /** @type {boolean} Whether LLM configurations are still loading */
   const [configLoading, setConfigLoading] = useState(true)
-  /** @type {Array<{id: string, content: string}>} Array of model response objects with IDs */
-  const [modelResponses, setModelResponses] = useState([])
+  /** @type {Array<{id: string, runId: string, status?: 'generating' | 'evaluating' | 'parsing' | 'scoring' | 'completed' | 'error', modelContent?: string, judgeText?: string, gradingBasis?: Object, score?: number, json?: any, explanation?: string}>} Array of flattened run context objects containing all response data for each run */
+  const [runContext, setRunContext] = useState([])
   /** @type {boolean} Whether a submission is currently in progress */
   const [isSubmitting, setIsSubmitting] = useState(false)
-  /** @type {string} Current status message for user feedback */
-
-  /** @type {Array<{id: string, content: string}>} Raw text responses from judge evaluations with IDs */
-  const [judgeTextResponses, setJudgeTextResponses] = useState([])
-  /** @type {Array<{id: string, gradingBasis: Object, score: number}>} Parsed evaluation results from judge responses with IDs */
-  const [judgeParseResponses, setJudgeParsedResponses] = useState([])
   /** @type {AbortController|null} Controller for cancelling ongoing operations */
   const [abortController, setAbortController] = useState(null)
-  const [pendingScoreRunId, setPendingScoreRunId] = useState(null)
   const [scoreState, setScoreState] = useState({
     attempts: 0,
     wins: 0,
     losses: 0,
-    parseFailures: 0,
+    failures: 0,
     criteriaStats: {},
   })
 
@@ -71,18 +79,13 @@ const useLLM = (addMessage) => {
         setLlmConfigs(configs)
       } catch (error) {
         console.warn('Could not fetch LLM configs from backend:', error.message)
-        // Fall back to client-side environment variables
-        const fallbackConfigs = [
-          {
-            provider: 'openai',
-            defaultModel: 'gpt-4o-mini',
-            models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
-            isActive: true,
-          },
-        ]
-        setLlmConfigs(fallbackConfigs)
-        setConfigLoading(false)
-        setAvailableModels(['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'])
+        // No fallback - require backend to be running for configs
+        setLlmConfigs([])
+        addMessage(
+          'Warning: Could not load LLM configurations. Please ensure the backend is running.',
+          'warning',
+          'config',
+        )
       } finally {
         setConfigLoading(false)
       }
@@ -114,7 +117,10 @@ const useLLM = (addMessage) => {
     addMessage('Adding manual response for evaluation...', 'info', 'manual')
 
     const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    setModelResponses((prev) => [{ id: responseId, content: response, runId }, ...prev])
+    setRunContext((prev) => [
+      { id: responseId, runId, status: 'evaluating', modelContent: response },
+      ...prev,
+    ])
     await evaluateResponse(
       response,
       validatedJson,
@@ -142,14 +148,12 @@ const useLLM = (addMessage) => {
    */
 
   const resetResults = () => {
-    setModelResponses([])
-    setJudgeTextResponses([])
-    setJudgeParsedResponses([])
+    setRunContext([])
     setScoreState({
       attempts: 0,
       wins: 0,
       losses: 0,
-      parseFailures: 0,
+      failures: 0,
       criteriaStats: {},
     })
   }
@@ -159,8 +163,17 @@ const useLLM = (addMessage) => {
    * @param {string} prompt - The prompt to send to the model
    * @param {string} model - Model identifier
    * @param {string} provider - Provider name
+   * @returns {Promise<string>} The generated response text
+   * @returns {Promise<string>} The generated response text
    */
   const generate = async (prompt, model, provider) => {
+    console.log('Sending generation request to backend:', {
+      model,
+      provider,
+      promptLength: prompt.length,
+      promptPreview: prompt.substring(0, 200) + (prompt.length > 200 ? '...' : ''),
+    })
+
     const requestOptions = { ...TEST_MODEL_OPTIONS, model, provider }
     const response = await llmApi.generateResponse(prompt, requestOptions)
 
@@ -210,7 +223,7 @@ const useLLM = (addMessage) => {
         attempts: prev.attempts + 1,
         wins: prev.wins + (isWin ? 1 : 0),
         losses: prev.losses + (isLoss ? 1 : 0),
-        parseFailures: prev.parseFailures + (isParseFailure ? 1 : 0),
+        failures: prev.failures + (isParseFailure ? 1 : 0),
         criteriaStats: newCriteriaStats,
       }
     })
@@ -242,14 +255,23 @@ const useLLM = (addMessage) => {
     addMessage(`Starting evaluation [${runId}]`, 'info', 'evaluation')
 
     try {
+      // Create initial run context entry
+      const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      setRunContext((prev) => {
+        return [...prev, { id: responseId, runId, status: 'generating' }]
+      })
+
       // Generate response
       const llmResponse = await generate(prompt, testModel, testProvider)
 
-      // Store response
-      const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      setModelResponses((responses) => {
-        return [...responses, { id: responseId, content: llmResponse, runId }]
-      })
+      // Update status and add model content
+      setRunContext((prev) =>
+        prev.map((item) =>
+          item.id === responseId
+            ? { ...item, status: 'evaluating', modelContent: llmResponse }
+            : item,
+        ),
+      )
 
       // Evaluate response
       let evaluation
@@ -265,11 +287,14 @@ const useLLM = (addMessage) => {
           runId,
         )
       } catch (error) {
-        // Store error as judge response
-        setJudgeTextResponses((r) => [
-          ...r,
-          { id: responseId, content: `Evaluation failed: ${error.message}`, runId },
-        ])
+        // Store error as judge response and set status to error
+        setRunContext((prev) =>
+          prev.map((item) =>
+            item.id === responseId
+              ? { ...item, status: 'error', judgeText: `Evaluation failed: ${error.message}` }
+              : item,
+          ),
+        )
         // Return a failed evaluation
         evaluation = {
           gradingBasis: null,
@@ -280,6 +305,19 @@ const useLLM = (addMessage) => {
       }
 
       const scoreResult = score(evaluation)
+
+      // Check if evaluation was valid (has some meaningful data)
+      const isValidEvaluation =
+        evaluation &&
+        (evaluation.gradingBasis || evaluation.score != null || evaluation.explanation)
+
+      // Set status to completed only if evaluation was valid
+      if (isValidEvaluation) {
+        setRunContext((prev) =>
+          prev.map((item) => (item.id === responseId ? { ...item, status: 'completed' } : item)),
+        )
+      }
+
       return { evaluation, ...scoreResult }
     } catch (e) {
       addMessage(`ERROR: ${e.message}`, 'error', 'evaluation')
@@ -309,13 +347,6 @@ const useLLM = (addMessage) => {
     judgeSystemPrompt,
     runId,
   ) => {
-    console.log(
-      'Evaluate called with judgeSystemPrompt:',
-      judgeSystemPrompt ? 'present' : 'empty',
-      judgeSystemPrompt?.length || 0,
-      'chars',
-    )
-
     if (!criteria) {
       throw new Error('Please provide valid JSON criteria array')
     }
@@ -329,7 +360,7 @@ const useLLM = (addMessage) => {
       // Fill the judge prompt template
       const responseReference = `Each criterion is evaluated independently as PASS or FAIL.
 
-${JSON.stringify(criteria)}
+${JSON.stringify(criteria, null, 4)}
 
 Failure to PASS more than 50% of the above criteria will result in a score of 0 points.
 `
@@ -354,6 +385,14 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
       ]
 
       // Call the LLM using the backend API with messages
+      console.log('Sending evaluation request to backend:', {
+        judgeModel,
+        judgeProvider,
+        messagesCount: messages.length,
+        systemMessageLength: messages[0]?.content?.length || 0,
+        userMessagePreview: messages[1]?.content?.substring(0, 200) + '...',
+      })
+
       const response = await llmApi.generateResponseWithMessages(messages, {
         ...JUDGE_MODEL,
         model: judgeModel,
@@ -361,9 +400,33 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
       })
       const judgeResponse = response.data.response
 
-      setJudgeTextResponses((r) => [...r, { id: responseId, content: judgeResponse, runId }])
+      // Set status to parsing
+      setRunContext((prev) =>
+        prev.map((item) =>
+          item.id === responseId ? { ...item, status: 'parsing', judgeText: judgeResponse } : item,
+        ),
+      )
+
       const e = parseEvaluation(judgeResponse)
-      setJudgeParsedResponses((r) => [...r, { id: responseId, ...e, runId }])
+
+      // Check if evaluation is valid (not null/undefined)
+      const isValidEvaluation = e && (e.gradingBasis || e.score != null || e.explanation)
+
+      setRunContext((prev) =>
+        prev.map((item) =>
+          item.id === responseId
+            ? {
+                ...item,
+                status: isValidEvaluation ? 'scoring' : 'error',
+                gradingBasis: e?.gradingBasis || null,
+                score: e?.score || null,
+                json: e?.json || null,
+                explanation:
+                  e?.explanation || (isValidEvaluation ? null : 'Evaluation parsing failed'),
+              }
+            : item,
+        ),
+      )
       addMessage(`Evaluation completed`, 'success', 'evaluation')
 
       return e
@@ -407,7 +470,7 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
       attempts: 0,
       wins: 0,
       losses: 0,
-      parseFailures: 0,
+      failures: 0,
       criteriaStats: {},
     })
 
@@ -448,7 +511,6 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
           completed++
           if (result.status === 'fulfilled') {
             const { evaluation, score, category } = result.value
-            console.log('back category', category)
             // score() already called in run
             if (category === 'win') {
               wins++
@@ -508,9 +570,7 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
     // State
     llmConfigs,
     configLoading,
-    modelResponses,
-    judgeParseResponses,
-    judgeTextResponses,
+    runContext,
     scoreState,
     isSubmitting,
 

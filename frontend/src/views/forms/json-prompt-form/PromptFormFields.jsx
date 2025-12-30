@@ -1,7 +1,4 @@
-import {
-  CFormLabel,
-  CFormTextarea,
-} from '@coreui/react'
+import { CFormLabel, CFormTextarea } from '@coreui/react'
 import PropTypes from 'prop-types'
 import JsonArrayTextarea from '../../../components/JsonArrayTextarea'
 
