@@ -44,42 +44,142 @@ api.interceptors.response.use(
 
 /**
  * @typedef {Object} LLMProviderConfig
- * @property {string} id
- * @property {string} name
- * @property {'openai' | 'anthropic' | 'google' | 'custom'} provider
- * @property {string} apiKey
- * @property {string} [baseUrl]
- * @property {string[]} models
- * @property {string} defaultModel
- * @property {boolean} isActive
- * @property {string} createdAt
- * @property {string} updatedAt
+ * @property {string} id - Unique identifier for the provider configuration
+ * @property {string} name - Human-readable name for the provider
+ * @property {string} provider - Custom provider name (any string)
+ * @property {'openai' | 'anthropic' | 'google' | 'custom'} sdk - SDK implementation to use
+ * @property {string} apiKey - API key for the provider (masked in responses)
+ * @property {string} [baseUrl] - Optional base URL for the API
+ * @property {string[]} models - Array of available models for this provider
+ * @property {string} defaultModel - Default model to use
+ * @property {boolean} isActive - Whether this provider is active
+ * @property {string} createdAt - ISO timestamp of creation
+ * @property {string} updatedAt - ISO timestamp of last update
  */
 
-// User Management API
+/**
+ * User Management API endpoints
+ * @namespace userApi
+ */
 export const userApi = {
+  /**
+   * Get all users
+   * @returns {Promise<AxiosResponse<User[]>>} List of all users
+   */
   getAll: () => api.get('/users'),
+
+  /**
+   * Get user by ID
+   * @param {string} id - User ID
+   * @returns {Promise<AxiosResponse<User>>} User data
+   */
   getById: (id) => api.get(`/users/${id}`),
+
+  /**
+   * Create a new user
+   * @param {Omit<User, 'id' | 'createdAt' | 'updatedAt'>} user - User data
+   * @returns {Promise<AxiosResponse<User>>} Created user
+   */
   create: (user) => api.post('/users', user),
+
+  /**
+   * Update an existing user
+   * @param {string} id - User ID
+   * @param {Partial<User>} user - Updated user data
+   * @returns {Promise<AxiosResponse<User>>} Updated user
+   */
   update: (id, user) => api.put(`/users/${id}`, user),
+
+  /**
+   * Delete a user
+   * @param {string} id - User ID
+   * @returns {Promise<AxiosResponse<void>>} Deletion confirmation
+   */
   delete: (id) => api.delete(`/users/${id}`),
 }
 
-// Configuration API
+/**
+ * LLM Provider Configuration API endpoints
+ * @namespace configApi
+ */
 export const configApi = {
+  /**
+   * Get all LLM provider configurations
+   * @returns {Promise<AxiosResponse<LLMProviderConfig[]>>} List of all configurations
+   */
   getAll: () => api.get('/config'),
+
+  /**
+   * Get active LLM provider configuration
+   * @returns {Promise<AxiosResponse<{models: string[], defaultModel: string}>>} Active config data
+   */
   getActive: () => api.get('/config/active'),
+
+  /**
+   * Get configuration by ID
+   * @param {string} id - Configuration ID
+   * @returns {Promise<AxiosResponse<LLMProviderConfig>>} Configuration data
+   */
   getById: (id) => api.get(`/config/${id}`),
+
+  /**
+   * Create a new provider configuration
+   * @param {Omit<LLMProviderConfig, 'id' | 'createdAt' | 'updatedAt'>} config - Configuration data
+   * @returns {Promise<AxiosResponse<{error: string, message: string}>>} Result (note: creation disabled)
+   */
   create: (config) => api.post('/config', config),
+
+  /**
+   * Update an existing configuration
+   * @param {string} id - Configuration ID
+   * @param {Partial<LLMProviderConfig>} config - Updated configuration data
+   * @returns {Promise<AxiosResponse<{error: string, message: string}>>} Result (note: updates disabled)
+   */
   update: (id, config) => api.put(`/config/${id}`, config),
+
+  /**
+   * Activate a configuration
+   * @param {string} id - Configuration ID
+   * @returns {Promise<AxiosResponse<{error: string, message: string}>>} Result (note: activation disabled)
+   */
   activate: (id) => api.put(`/config/${id}/activate`),
+
+  /**
+   * Delete a configuration
+   * @param {string} id - Configuration ID
+   * @returns {Promise<AxiosResponse<{error: string, message: string}>>} Result (note: deletion disabled)
+   */
   delete: (id) => api.delete(`/config/${id}`),
 }
 
-// LLM API
+/**
+ * LLM API endpoints for text generation
+ * @namespace llmApi
+ */
 export const llmApi = {
+  /**
+   * Generate a response from a text prompt
+   * @param {string} prompt - The text prompt to send to the LLM
+   * @param {Object} [options] - Generation options
+   * @param {string} [options.model] - Model to use for generation
+   * @param {string} [options.provider] - Provider to use
+   * @param {number} [options.temperature] - Temperature for generation (0.0-2.0)
+   * @param {number} [options.max_tokens] - Maximum tokens to generate
+   * @returns {Promise<AxiosResponse<{response: string}>>} Generated response
+   */
   generateResponse: (prompt, options) =>
     api.post('/llm/generate', { prompt, options }),
+
+  /**
+   * Generate a response using a messages array (chat format)
+   * @param {Array<{role: 'system'|'user'|'assistant', content: string}>} messages - Chat messages
+   * @param {Object} [options] - Generation options
+   * @param {string} [options.model] - Model to use for generation
+   * @param {string} [options.provider] - Provider to use
+   * @param {number} [options.temperature] - Temperature for generation (0.0-2.0)
+   * @param {number} [options.max_tokens] - Maximum tokens to generate
+   * @returns {Promise<AxiosResponse<{response: string}>>} Generated response
+   */
   generateResponseWithMessages: (messages, options) =>
     api.post('/llm/generate-with-messages', { messages, options }),
 }

@@ -110,4 +110,31 @@ temp/
 
 # Database files
 *.sqlite
+*.sqlite3
 *.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Backend data directories
+backend/data/
+backend/uploads/
+backend/logs/
+backend/temp/
+backend/tmp/
+backend/storage/
+backend/cache/
+
+# NestJS specific
+backend/.nestjs/
+backend/coverage/
+
+# Session files
+backend/sessions/
+
+# Process files
+*.pid
+*.seed
+
+# Turbo logs (already covered by logs pattern above)
+# .turbo/ is already ignored above

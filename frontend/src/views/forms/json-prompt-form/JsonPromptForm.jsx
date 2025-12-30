@@ -6,16 +6,16 @@ import {
   CCardHeader,
   CCol,
   CForm,
-  CFormTextarea,
-  CFormLabel,
-  CFormSelect,
   CRow,
-  CAlert,
-  CAccordion, CAccordionBody, CAccordionHeader, CAccordionItem, CBadge,
-  CTab, CTabContent, CTabList, CTabPanel, CTabs
 } from '@coreui/react'
-import JsonArrayTextarea from 'src/components/JsonArrayTextarea'
 import useLLM from '../../../hooks/useLLM'
+import {
+  LLMConfigSelector,
+  PromptFormFields,
+  StatusAlerts,
+  ResultsAccordion,
+  Scoreboard
+} from './index'
 
 const JsonPromptForm = () => {
   const [criteriaJson, setCriteriaJson] = useState('')
@@ -29,7 +29,7 @@ const JsonPromptForm = () => {
   const [testModel, setTestModel] = useState('')
 
   // Use the LLM hook for all LLM-related functionality
-  const {
+   const {
     // State
     llmConfigs,
     configLoading,
@@ -41,7 +41,6 @@ const JsonPromptForm = () => {
     isSubmitting,
     submitMessage,
 
-
     // Actions
     batch,
     addManualResponse,
@@ -49,8 +48,19 @@ const JsonPromptForm = () => {
     resetResults,
   } = useLLM()
 
+  // Event handlers
   const handleJsonValid = (parsedArray) => {
     setValidatedJson(parsedArray)
+  }
+
+  const handleTestProviderChange = (provider) => {
+    setTestProvider(provider)
+    setTestModel('') // Reset model when provider changes
+  }
+
+  const handleJudgeProviderChange = (provider) => {
+    setJudgeProvider(provider)
+    setJudgeModel('') // Reset model when provider changes
   }
 
   const handleSubmit = async (event) => {
@@ -84,36 +94,18 @@ const JsonPromptForm = () => {
 
   return (
     <>
-      <CRow>
-        <CCol xs={12}>
-          {/* LLM Configuration Status */}
-          {configLoading ? (
-            <CAlert color="info" className="mb-3">
-              Loading LLM configuration...
-            </CAlert>
-          ) : llmConfigs && llmConfigs.length > 0 ? (
-            <CAlert color="success" className="mb-3">
-              Connected to {llmConfigs.length} LLM provider(s)
-            </CAlert>
-          ) : (
-            <CAlert color="warning" className="mb-3">
-              Using fallback configuration (check backend connection)
-            </CAlert>
-          )}
-        </CCol>
-      </CRow>
-      <CRow>
-        <CCol xs={12}>
-          {submitMessage && (
-            <CAlert
-              color={submitMessage.includes('Error') ? 'danger' : 'success'}
-              className="mb-3"
-            >
-              {submitMessage}
-            </CAlert>
-          )}
-        </CCol>
-      </CRow>
+      <StatusAlerts
+        configLoading={configLoading}
+        llmConfigs={llmConfigs}
+        submitMessage={submitMessage}
+      />
+
+      <Scoreboard
+        attempts={attempts}
+        wins={wins}
+        isSubmitting={isSubmitting}
+      />
+
       <CRow>
         <CCol xs={12}>
           <CCard className="mb-4">
@@ -122,138 +114,31 @@ const JsonPromptForm = () => {
             </CCardHeader>
             <CCardBody>
               <CForm onSubmit={handleSubmit}>
-                <CRow>
-                  <CCol md={3}>
-                    <div className="mb-3">
-                      <CFormLabel htmlFor="testProviderSelect">Test Provider</CFormLabel>
-                      <CFormSelect
-                        id="testProviderSelect"
-                        value={testProvider}
-                        onChange={(e) => {
-                          setTestProvider(e.target.value)
-                          setTestModel('')
-                        }}
-                        disabled={configLoading}
-                      >
-                        <option value="">Select Provider</option>
-                        {llmConfigs?.map((config) => (
-                          <option key={config.provider} value={config.provider}>
-                            {config.provider}
-                          </option>
-                        ))}
-                      </CFormSelect>
-                    </div>
-                  </CCol>
-                  <CCol md={3}>
-                    <div className="mb-3">
-                      <CFormLabel htmlFor="testModelSelect">Test Model</CFormLabel>
-                      <CFormSelect
-                        id="testModelSelect"
-                        value={testModel}
-                        onChange={(e) => setTestModel(e.target.value)}
-                        disabled={configLoading || !testProvider}
-                      >
-                        <option value="">Select Model</option>
-                        {llmConfigs?.find(c => c.provider === testProvider)?.models.map((model) => (
-                          <option key={model} value={model}>
-                            {model}
-                          </option>
-                        ))}
-                      </CFormSelect>
-                    </div>
-                  </CCol>
-                  <CCol md={3}>
-                    <div className="mb-3">
-                      <CFormLabel htmlFor="judgeProviderSelect">Judge Provider</CFormLabel>
-                      <CFormSelect
-                        id="judgeProviderSelect"
-                        value={judgeProvider}
-                        onChange={(e) => {
-                          setJudgeProvider(e.target.value)
-                          setJudgeModel('')
-                        }}
-                        disabled={configLoading}
-                      >
-                        <option value="">Select Provider</option>
-                        {llmConfigs?.map((config) => (
-                          <option key={config.provider} value={config.provider}>
-                            {config.provider}
-                          </option>
-                        ))}
-                      </CFormSelect>
-                    </div>
-                  </CCol>
-                  <CCol md={3}>
-                    <div className="mb-3">
-                      <CFormLabel htmlFor="judgeModelSelect">Judge Model</CFormLabel>
-                      <CFormSelect
-                        id="judgeModelSelect"
-                        value={judgeModel}
-                        onChange={(e) => setJudgeModel(e.target.value)}
-                        disabled={configLoading || !judgeProvider}
-                      >
-                        <option value="">Select Model</option>
-                        {llmConfigs?.find(c => c.provider === judgeProvider)?.models.map((model) => (
-                          <option key={model} value={model}>
-                            {model}
-                          </option>
-                        ))}
-                      </CFormSelect>
-                    </div>
-                  </CCol>
-                </CRow>
-                <div className="mb-3">
-                  <CFormLabel htmlFor="promptTextarea">Prompt</CFormLabel>
-                  <CFormTextarea
-                    id="promptTextarea"
-                    rows={6}
-                    placeholder="Enter your prompt here..."
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="mb-3">
-                  <CFormLabel htmlFor="promptTextarea">Ideal Response</CFormLabel>
-                  <CFormTextarea
-                    id="idealTextarea"
-                    rows={6}
-                    placeholder="Enter your idealResponse here..."
-                    value={idealResponse}
-                    onChange={(e) => setIdealResponse(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="mb-3">
-                  <JsonArrayTextarea
-                    label="Criteria JSON Array"
-                    placeholder='Enter JSON array like: ["criterion1", "criterion2", "criterion3"]'
-                    rows={8}
-                    value={criteriaJson}
-                    onChange={setCriteriaJson}
-                    onValidJson={handleJsonValid}
-                  />
-                  <div className="mb-3">
-                    <CFormLabel htmlFor="maxTryInput">Max Attempts (default: 20)</CFormLabel>
-                    <input
-                      type="number"
-                      id="maxTryInput"
-                      className="form-control"
-                      value={maxTry}
-                      onChange={(e) =>
-                        setMaxTry(Math.max(1, Math.min(100, parseInt(e.target.value) || 20)))
-                      }
-                      min="1"
-                      max="100"
-                      disabled={isSubmitting}
-                    />
-                    <small className="form-text text-muted">
-                      Maximum number of evaluation attempts (1-100)
-                    </small>
-                  </div>
-                </div>
+                <LLMConfigSelector
+                  llmConfigs={llmConfigs}
+                  configLoading={configLoading}
+                  testProvider={testProvider}
+                  testModel={testModel}
+                  judgeProvider={judgeProvider}
+                  judgeModel={judgeModel}
+                  onTestProviderChange={handleTestProviderChange}
+                  onTestModelChange={setTestModel}
+                  onJudgeProviderChange={handleJudgeProviderChange}
+                  onJudgeModelChange={setJudgeModel}
+                />
 
-
+                <PromptFormFields
+                  prompt={prompt}
+                  idealResponse={idealResponse}
+                  criteriaJson={criteriaJson}
+                  maxTry={maxTry}
+                  isSubmitting={isSubmitting}
+                  onPromptChange={setPrompt}
+                  onIdealResponseChange={setIdealResponse}
+                  onCriteriaJsonChange={setCriteriaJson}
+                  onMaxTryChange={setMaxTry}
+                  onJsonValid={handleJsonValid}
+                />
 
                 <CButton className='m-2' color="primary" type="submit" disabled={isSubmitting || configLoading} name="action" value="run">
                   {isSubmitting ? 'Processing...' : 'Run'}
@@ -277,40 +162,12 @@ const JsonPromptForm = () => {
           </CCard>
         </CCol>
       </CRow>
-      {modelResponses && modelResponses.length > 0 && < CRow >
-        <CAccordion activeItemKey={1}>
-          {modelResponses.map((res, index) => {
-            return (<CAccordionItem itemKey={index + 1}>
-              <CAccordionHeader>
 
-                <strong style={{ marginRight: "10px" }}> Response {index + 1} </strong>
-                {judgeParseResponses.at(index) && Object.keys(judgeParseResponses.at(index).gradingBasis).map(key => {
-                  return <CBadge style={{ marginRight: "10px" }} color={judgeParseResponses.at(index).gradingBasis[key] !== "FAIL" ? "success" : "danger"}>{key}</CBadge>
-                })}
-                {judgeParseResponses.at(index) && <CBadge style={{ marginRight: "10px" }} color={judgeParseResponses.at(index).score !== 0 ? "success" : "danger"}>score</CBadge>}
-
-              </CAccordionHeader>
-              <CAccordionBody>
-                <CTabs defaultActiveItemKey="response">
-                  <CTabList variant="tabs">
-                    <CTab itemKey="response">Response</CTab>
-                    <CTab itemKey="evaluation" disabled={!judgeTextResponses.at(index)}>Evaluation</CTab>
-                  </CTabList>
-                  <CTabContent>
-                    <CTabPanel className="p-3" itemKey="response">
-                      {res}
-                    </CTabPanel>
-                    <CTabPanel className="p-3" itemKey="evaluation">
-                      {judgeTextResponses.at(index)}
-                    </CTabPanel>
-                  </CTabContent>
-                </CTabs>
-              </CAccordionBody>
-            </CAccordionItem>
-            )
-          })}
-        </CAccordion >
-      </CRow >}
+      <ResultsAccordion
+        modelResponses={modelResponses}
+        judgeParseResponses={judgeParseResponses}
+        judgeTextResponses={judgeTextResponses}
+      />
     </>
   )
 }

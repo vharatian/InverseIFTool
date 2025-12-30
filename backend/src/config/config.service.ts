@@ -3,7 +3,12 @@ import { Injectable } from '@nestjs/common';
 export interface LLMProviderConfig {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'google' | 'fireworks' | 'custom' | 'openrouter';
+  provider: string;
+  sdk:
+    | 'openai'
+    | 'anthropic'
+    | 'google'
+    | 'custom';
   apiKey: string;
   baseUrl?: string;
   models: string[];
@@ -27,7 +32,7 @@ export class ConfigService {
 
     // Load configs from LLM_PROVIDERS list
     const providersString = process.env.LLM_PROVIDERS || 'openai';
-    const providers = providersString.split(',').map(p => p.trim());
+    const providers = providersString.split(',').map((p) => p.trim());
 
     for (const provider of providers) {
       const config = this.loadConfigFromEnv(provider);
@@ -54,22 +59,37 @@ export class ConfigService {
     const baseUrlEnv = `${prefix}_BASE_URL`;
     const defaultModelEnv = `${prefix}_DEFAULT_MODEL`;
     const modelsEnv = `${prefix}_MODELS`;
+    const sdkEnv = `${prefix}_SDK`;
 
-    const apiKey = process.env[apiKeyEnv] || (prov === 'openai' ? process.env.OPENAI_API_KEY : '') || '';
+    const apiKey =
+      process.env[apiKeyEnv] ||
+      (prov === 'openai' ? process.env.OPENAI_API_KEY : '') ||
+      '';
     if (!apiKey) {
       console.warn(`No API key found for provider ${prov}`);
       return null;
     }
 
-    const baseUrl = process.env[baseUrlEnv] || (prov === 'openai' ? 'https://api.openai.com/v1' : '');
-    const defaultModel = process.env[defaultModelEnv] || (prov === 'openai' ? 'gpt-4o-mini' : '');
-    const modelsString = process.env[modelsEnv] || (prov === 'openai' ? 'gpt-4o-mini,gpt-4o,gpt-3.5-turbo' : '');
+    const baseUrl =
+      process.env[baseUrlEnv] ||
+      (prov === 'openai' ? 'https://api.openai.com/v1' : '');
+    const defaultModel =
+      process.env[defaultModelEnv] || (prov === 'openai' ? 'gpt-4o-mini' : '');
+    const modelsString =
+      process.env[modelsEnv] ||
+      (prov === 'openai' ? 'gpt-4o-mini,gpt-4o,gpt-3.5-turbo' : '');
     const models = modelsString.split(',').map((model) => model.trim());
+    const sdk = (process.env[sdkEnv] || 'openai') as
+      | 'openai'
+      | 'anthropic'
+      | 'google'
+      | 'custom';
 
     return {
       id: `${prov}-config`,
       name: `${prov.charAt(0).toUpperCase() + prov.slice(1)} Provider`,
-      provider: prov as 'openai' | 'anthropic' | 'google' | 'custom' | 'openrouter',
+      provider: prov,
+      sdk,
       apiKey,
       baseUrl,
       models,
@@ -82,22 +102,22 @@ export class ConfigService {
 
   findAll(): LLMProviderConfig[] {
     // Return configs without sensitive API key data
-    return this.configs.map(config => ({
+    return this.configs.map((config) => ({
       ...config,
       apiKey: config.apiKey ? '***' + config.apiKey.slice(-4) : '',
     }));
   }
 
   findOne(id: string): LLMProviderConfig | undefined {
-    return this.configs.find(config => config.id === id);
+    return this.configs.find((config) => config.id === id);
   }
 
   findActive(): LLMProviderConfig | undefined {
-    return this.configs.find(config => config.isActive) || this.configs[0];
+    return this.configs.find((config) => config.isActive) || this.configs[0];
   }
 
   findProviderForModel(model: string): LLMProviderConfig | undefined {
-    return this.configs.find(config => config.models.includes(model));
+    return this.configs.find((config) => config.models.includes(model));
   }
 
   getFullAll(): LLMProviderConfig[] {

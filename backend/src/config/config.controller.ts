@@ -20,10 +20,11 @@ export class ConfigController {
   getAllConfigs() {
     const configs = this.configService.findAll();
     // Return configs without sensitive information
-    return configs.map(config => ({
+    return configs.map((config) => ({
       id: config.id,
       name: config.name,
       provider: config.provider,
+      sdk: config.sdk,
       models: config.models,
       defaultModel: config.defaultModel,
       isActive: config.isActive,
@@ -34,7 +35,9 @@ export class ConfigController {
   }
 
   @Get('active')
-  getActiveConfig(): { models: string[]; defaultModel: string } | { error: string } {
+  getActiveConfig():
+    | { models: string[]; defaultModel: string }
+    | { error: string } {
     const config = this.configService.findActive();
     if (!config) {
       return { error: 'No active configuration found' };

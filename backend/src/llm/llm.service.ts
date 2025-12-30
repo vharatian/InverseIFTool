@@ -17,7 +17,7 @@ export class LlmService {
    */
   private getConfigByProvider(provider: string): LLMProviderConfig | null {
     const configs = this.configService.getFullAll();
-    return configs.find(config => config.provider === provider) || null;
+    return configs.find((config) => config.provider === provider) || null;
   }
 
   /**
@@ -35,8 +35,8 @@ export class LlmService {
       max_tokens: 1000,
     };
 
-    // Configure based on provider type
-    switch (providerConfig.provider) {
+    // Configure based on sdk type
+    switch (providerConfig.sdk) {
       case 'openai':
         this.configureOpenAI(providerConfig);
         break;
@@ -46,14 +46,8 @@ export class LlmService {
       case 'google':
         this.configureGoogle(providerConfig);
         break;
-      case 'fireworks':
-        this.configureOpenAI(providerConfig);
-        break;
-      case 'openrouter':
-        this.configureOpenAI(providerConfig);
-        break;
       default:
-        throw new Error(`Unsupported provider: ${providerConfig.provider}`);
+        throw new Error(`Unsupported sdk: ${providerConfig.sdk}`);
     }
   }
 
@@ -109,7 +103,10 @@ export class LlmService {
     const { provider: _, ...clientOptions } = options;
 
     // Configure if not already configured for this provider
-    if (!this.currentProvider || this.currentProvider.id !== providerConfig.id) {
+    if (
+      !this.currentProvider ||
+      this.currentProvider.id !== providerConfig.id
+    ) {
       this.configureProvider(providerConfig);
     }
 
@@ -170,7 +167,10 @@ export class LlmService {
       const providerConfig = this.getConfigByProvider(provider);
       if (providerConfig) {
         // Reconfigure if different provider
-        if (!this.currentProvider || this.currentProvider.id !== providerConfig.id) {
+        if (
+          !this.currentProvider ||
+          this.currentProvider.id !== providerConfig.id
+        ) {
           this.configureProvider(providerConfig);
         }
       }

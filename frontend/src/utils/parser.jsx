@@ -1,3 +1,13 @@
+/**
+ * Parse evaluation response from judge LLM into structured format
+ * @param {string} text - Raw evaluation text from judge LLM
+ * @returns {Object} Parsed evaluation result
+ * @property {Object|null} gradingBasis - Parsed JSON grading criteria results
+ * @property {number|null} score - Numerical score (0 or 1)
+ * @property {Object|null} json - Parsed JSON data with answer_score
+ * @property {string|null} explanation - Text explanation of the evaluation
+ * @throws {Error} If JSON parsing fails for grading basis or JSON sections
+ */
 export function parseEvaluation(text) {
   const result = {
     gradingBasis: null,

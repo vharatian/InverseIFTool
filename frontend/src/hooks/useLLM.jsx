@@ -4,25 +4,50 @@ import { cib500px } from '@coreui/icons'
 import { sleep } from '../utils/tools'
 import { parseEvaluation } from '../utils/parser'
 
+/**
+ * Default options for test model generation (creative, varied responses)
+ * @constant {Object}
+ */
 const TEST_MODEL_OPTIONS = {
   temperature: 1,
   top_p: 1,
 }
+
+/**
+ * Default options for judge model evaluation (consistent, deterministic responses)
+ * @constant {Object}
+ */
 const JUDGE_MODEL = {
-  temperature: 0,
-  top_p: 0,
+  temperature: 1,
+  // top_p: 0,
 }
 
+/**
+ * Custom hook for LLM operations including model testing, evaluation, and batch processing
+ * Manages state for LLM configurations, responses, and evaluation results
+ * @returns {Object} Hook interface with state and actions
+ */
 const useLLM = () => {
+  // State management
+  /** @type {LLMProviderConfig[]} Array of available LLM provider configurations */
   const [llmConfigs, setLlmConfigs] = useState([])
+  /** @type {boolean} Whether LLM configurations are still loading */
   const [configLoading, setConfigLoading] = useState(true)
+  /** @type {Array<{id: string, content: string}>} Array of model response objects with IDs */
   const [modelResponses, setModelResponses] = useState([])
+  /** @type {boolean} Whether a submission is currently in progress */
   const [isSubmitting, setIsSubmitting] = useState(false)
+  /** @type {string} Current status message for user feedback */
   const [submitMessage, setSubmitMessage] = useState('')
+  /** @type {Array<{id: string, content: string}>} Raw text responses from judge evaluations with IDs */
   const [judgeTextResponses, setJudgeTextResponses] = useState([])
+  /** @type {Array<{id: string, gradingBasis: Object, score: number}>} Parsed evaluation results from judge responses with IDs */
   const [judgeParseResponses, setJudgeParsedResponses] = useState([])
+  /** @type {number} Total number of attempts made in batch operations */
   const [attempts, setAttempts] = useState(0)
+  /** @type {number} Number of successful evaluations (wins) */
   const [wins, setWins] = useState(0)
+  /** @type {AbortController|null} Controller for cancelling ongoing operations */
   const [abortController, setAbortController] = useState(null)
 
   // Fetch LLM configurations from backend on hook initialization
@@ -53,11 +78,24 @@ const useLLM = () => {
     fetchConfigs()
   }, [])
 
+  /**
+   * Add a manual response and evaluate it against criteria
+   * @param {string} prompt - The original prompt
+   * @param {string} response - The manual response to evaluate
+   * @param {Array} validatedJson - Validation criteria array
+   * @param {string} judgeProvider - Provider to use for evaluation
+   * @param {string} judgeModel - Model to use for evaluation
+   * @returns {Promise<boolean|null>} Evaluation result
+   */
   const addManualResponse = async (prompt, response, validatedJson, judgeProvider, judgeModel) => {
-    setModelResponses(prev => [response, ...prev])
-    await evaluate(validatedJson, prompt, response, judgeProvider, judgeModel)
+    const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    setModelResponses(prev => [{ id: responseId, content: response }, ...prev])
+    await evaluate(responseId, validatedJson, prompt, response, judgeProvider, judgeModel)
   }
 
+  /**
+   * Cancel the current batch operation
+   */
   const cancelBatch = () => {
     if (abortController) {
       abortController.abort()
@@ -66,6 +104,9 @@ const useLLM = () => {
     }
   }
 
+  /**
+   * Reset all results and counters to initial state
+   */
   const resetResults = () => {
     setModelResponses([])
     setJudgeTextResponses([])
@@ -75,6 +116,16 @@ const useLLM = () => {
     setSubmitMessage('')
   }
 
+  /**
+   * Run a single test with the specified model and evaluate the result
+   * @param {string} prompt - The prompt to send to the test model
+   * @param {Array} criteria - Evaluation criteria array
+   * @param {string} testProvider - Provider to use for test model
+   * @param {string} testModel - Model to use for generation
+   * @param {string} judgeProvider - Provider to use for evaluation
+   * @param {string} judgeModel - Model to use for judging responses
+   * @returns {Promise<boolean|null>} True if evaluation passed, false if failed, null if error
+   */
   const runTestModel = async (prompt, criteria, testProvider, testModel, judgeProvider, judgeModel) => {
     if (!prompt.trim()) {
       setSubmitMessage('Please provide a prompt')
@@ -92,10 +143,11 @@ const useLLM = () => {
       const llmResponse = response.data.response
 
       setSubmitMessage(`LLM Response: ${llmResponse}`)
+      const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       setModelResponses((responses) => {
-        return [...responses, llmResponse]
+        return [...responses, { id: responseId, content: llmResponse }]
       })
-      const res = await evaluate(criteria, prompt, llmResponse, judgeProvider, judgeModel)
+      const res = await evaluate(responseId, criteria, prompt, llmResponse, judgeProvider, judgeModel)
       return res
     } catch (error) {
       console.error('LLM call failed:', error)
@@ -106,7 +158,17 @@ const useLLM = () => {
     }
   }
 
-  const evaluate = async (validatedJson, prompt, llmResponse, judgeProvider, judgeModel) => {
+  /**
+   * Evaluate a response against criteria using a judge LLM
+   * @param {string} responseId - Unique ID for this response set
+   * @param {Array} validatedJson - Array of evaluation criteria objects
+   * @param {string} prompt - The original prompt given to the test model
+   * @param {string} llmResponse - The response from the test model to evaluate
+   * @param {string} judgeProvider - Provider to use for the judge model
+   * @param {string} judgeModel - Model to use for evaluation
+   * @returns {Promise<boolean|null>} False if evaluation passed (score=0 means failure), true if failed, null if error
+   */
+  const evaluate = async (responseId, validatedJson, prompt, llmResponse, judgeProvider, judgeModel) => {
     if (!validatedJson) {
       setSubmitMessage('Please provide valid JSON criteria array')
       return
@@ -345,10 +407,10 @@ ${llmResponse}
       const response = await llmApi.generateResponseWithMessages(messages, { ...JUDGE_MODEL, model: judgeModel, provider: judgeProvider })
       console.log("llm rsponse", response)
       const judgeResponse = response.data.response
-      setJudgeTextResponses(r => [...r, judgeResponse])
+      setJudgeTextResponses(r => [...r, { id: responseId, content: judgeResponse }])
       const e = parseEvaluation(judgeResponse)
       console.log("extracted", e)
-      setJudgeParsedResponses(r => [...r, e])
+      setJudgeParsedResponses(r => [...r, { id: responseId, ...e }])
       return e.score == 0
 
     } catch (error) {
@@ -360,6 +422,17 @@ ${llmResponse}
     return null
   }
 
+  /**
+   * Run batch testing until goal is reached or max attempts exceeded
+   * @param {string} prompt - The prompt to test
+   * @param {Array} criteria - Evaluation criteria array
+   * @param {number} [maxTry=10] - Maximum number of attempts
+   * @param {number} [goal=4] - Number of successful evaluations needed
+   * @param {string} testProvider - Provider for test model
+   * @param {string} testModel - Model for generation
+   * @param {string} judgeProvider - Provider for judge model
+   * @param {string} judgeModel - Model for evaluation
+   */
   const batch = async (prompt, criteria, maxTry = 10, goal = 4, testProvider, testModel, judgeProvider, judgeModel) => {
     const controller = new AbortController()
     setAbortController(controller)
@@ -389,21 +462,33 @@ ${llmResponse}
 
   return {
     // State
+    /** @type {LLMProviderConfig[]} Available LLM provider configurations */
     llmConfigs,
+    /** @type {boolean} Whether configurations are loading */
     configLoading,
+    /** @type {Array<{id: string, content: string}>} Model response objects with IDs */
     modelResponses,
+    /** @type {Array<{id: string, gradingBasis: Object, score: number}>} Parsed judge evaluation results with IDs */
     judgeParseResponses,
+    /** @type {Array<{id: string, content: string}>} Raw judge response texts with IDs */
     judgeTextResponses,
+    /** @type {number} Number of successful evaluations */
     wins,
+    /** @type {number} Total number of attempts */
     attempts,
+    /** @type {boolean} Whether an operation is in progress */
     isSubmitting,
+    /** @type {string} Current status message */
     submitMessage,
 
-
     // Actions
+    /** @type {Function} Run batch testing */
     batch,
+    /** @type {Function} Add and evaluate manual response */
     addManualResponse,
+    /** @type {Function} Cancel current batch operation */
     cancelBatch,
+    /** @type {Function} Reset all results */
     resetResults,
   }
 }
