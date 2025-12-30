@@ -7,7 +7,7 @@ export class LlmController implements OnModuleInit {
   constructor(
     private readonly llmService: LlmService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     // Configure the LLM service with the active config on startup
@@ -20,9 +20,15 @@ export class LlmController implements OnModuleInit {
   @Post('generate')
   async generateResponse(@Body() body: { prompt: string; options?: any }) {
     const { prompt, options } = body;
-    return {
-      response: await this.llmService.generateResponse(prompt, options),
-    };
+    console.log("llm prompt", prompt)
+
+    try {
+      const response = await this.llmService.generateResponse(prompt, options);
+      return { response };
+    } catch (error) {
+      console.error(`[LLM Controller] Generate failed: ${error.message}`);
+      throw error;
+    }
   }
 
   @Post('generate-with-messages')
@@ -30,11 +36,17 @@ export class LlmController implements OnModuleInit {
     @Body() body: { messages: any[]; options?: any },
   ) {
     const { messages, options } = body;
-    return {
-      response: await this.llmService.generateResponseWithMessages(
+    console.log("llm_messages", messages)
+
+    try {
+      const response = await this.llmService.generateResponseWithMessages(
         messages,
         options,
-      ),
-    };
+      );
+      return { response };
+    } catch (error) {
+      console.error(`[LLM Controller] Generate with messages failed: ${error.message}`);
+      throw error;
+    }
   }
 }

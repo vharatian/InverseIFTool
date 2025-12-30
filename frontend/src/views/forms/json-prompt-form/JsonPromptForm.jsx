@@ -9,10 +9,11 @@ import {
   CRow,
 } from '@coreui/react'
 import useLLM from '../../../hooks/useLLM'
+import { useLog } from '../../../contexts/LogContext'
 import {
   LLMConfigSelector,
   PromptFormFields,
-  StatusAlerts,
+  ActivityConsole,
   ResultsAccordion,
   Scoreboard
 } from './index'
@@ -21,6 +22,7 @@ const JsonPromptForm = () => {
   const [criteriaJson, setCriteriaJson] = useState('')
   const [idealResponse, setIdealResponse] = useState('')
   const [prompt, setPrompt] = useState('')
+  const [judgeSystemPrompt, setJudgeSystemPrompt] = useState('')
   const [validatedJson, setValidatedJson] = useState(null)
   const [maxTry, setMaxTry] = useState(20)
   const [judgeProvider, setJudgeProvider] = useState('')
@@ -28,8 +30,11 @@ const JsonPromptForm = () => {
   const [testProvider, setTestProvider] = useState('')
   const [testModel, setTestModel] = useState('')
 
+  // Use the centralized log context
+  const { addMessage } = useLog()
+
   // Use the LLM hook for all LLM-related functionality
-   const {
+  const {
     // State
     llmConfigs,
     configLoading,
@@ -38,8 +43,8 @@ const JsonPromptForm = () => {
     judgeTextResponses,
     wins,
     attempts,
+    batchResults,
     isSubmitting,
-    submitMessage,
 
     // Actions
     batch,
@@ -48,9 +53,29 @@ const JsonPromptForm = () => {
     resetResults,
   } = useLLM()
 
+  // Helper function to find provider for a given model
+  const findProviderForModel = (model) => {
+    if (!model || !llmConfigs) return null
+    return llmConfigs.find(config => config.models.includes(model))?.provider || null
+  }
+
+
+
   // Event handlers
   const handleJsonValid = (parsedArray) => {
     setValidatedJson(parsedArray)
+  }
+
+  const handleTestModelChange = (model) => {
+    setTestModel(model)
+    const provider = findProviderForModel(model)
+    if (provider) setTestProvider(provider)
+  }
+
+  const handleJudgeModelChange = (model) => {
+    setJudgeModel(model)
+    const provider = findProviderForModel(model)
+    if (provider) setJudgeProvider(provider)
   }
 
   const handleTestProviderChange = (provider) => {
@@ -67,11 +92,35 @@ const JsonPromptForm = () => {
     event.preventDefault()
     console.log(event)
     const action = event.nativeEvent.submitter.value
-    if (action === "run") {
-      await batch(prompt, validatedJson, maxTry, 4, testProvider, testModel, judgeProvider, judgeModel)
-    }
-    if (action === "test") {
-      await addManualResponse(prompt, idealResponse, validatedJson, judgeProvider, judgeModel)
+
+    // Generate unique run ID for this operation
+    const runId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+
+    try {
+      if (action === "run") {
+        addMessage(`🚀 Starting batch run [${runId}] with ${maxTry} attempts`, 'info', 'batch')
+        addMessage(`📝 Test Model: ${testModel} (${testProvider})`, 'info', 'batch')
+        addMessage(`🔍 Judge Model: ${judgeModel} (${judgeProvider})`, 'info', 'batch')
+        addMessage(`🎯 Goal: 4 successful evaluations`, 'info', 'batch')
+
+        await batch(prompt, validatedJson, maxTry, 4, testProvider, testModel, judgeProvider, judgeModel, judgeSystemPrompt,
+          (progressMsg) => addMessage(progressMsg, 'info', 'batch'), runId)
+
+        const finalWinRate = attempts > 0 ? Math.round((wins / attempts) * 100) : 0
+        addMessage(`✅ Batch run [${runId}] completed: ${wins}/${attempts} wins (${finalWinRate}% success rate)`, 'success', 'batch')
+      }
+      if (action === "test") {
+        addMessage(`🧪 Starting manual test [${runId}] evaluation`, 'info', 'test')
+        addMessage(`📝 Test Model: ${testModel} (${testProvider})`, 'info', 'test')
+        addMessage(`🔍 Judge Model: ${judgeModel} (${judgeProvider})`, 'info', 'test')
+
+        await addManualResponse(prompt, idealResponse, validatedJson, judgeProvider, judgeModel, judgeSystemPrompt,
+          (progressMsg) => addMessage(progressMsg, 'info', 'test'), runId)
+
+        addMessage(`✅ Manual test [${runId}] completed. Check evaluation results below.`, 'success', 'test')
+      }
+    } catch (error) {
+      addMessage(`❌ Run [${runId}] failed: ${error.message}`, 'error', 'system')
     }
   }
 
@@ -81,29 +130,47 @@ const JsonPromptForm = () => {
   }, [modelResponses, judgeParseResponses])
 
   useEffect(() => {
-    if (llmConfigs && llmConfigs.length > 0) {
-      const activeConfig = llmConfigs.find(c => c.isActive) || llmConfigs[0]
-      if (activeConfig) {
-        if (!testProvider) setTestProvider(activeConfig.provider)
-        if (!judgeProvider) setJudgeProvider(activeConfig.provider)
-        if (!testModel && testProvider === activeConfig.provider) setTestModel(activeConfig.defaultModel)
-        if (!judgeModel && judgeProvider === activeConfig.provider) setJudgeModel(activeConfig.defaultModel)
+    if (llmConfigs && llmConfigs.length > 0 && !configLoading) {
+      addMessage(`LLM configuration loaded. ${llmConfigs.length} provider(s) available.`, 'success', 'config')
+
+      // Set default models if none are selected
+      if (!testModel) {
+        const activeConfig = llmConfigs.find(c => c.isActive) || llmConfigs[0]
+        if (activeConfig) {
+          setTestModel(activeConfig.defaultModel)
+          setTestProvider(activeConfig.provider)
+          addMessage(`Set default test model: ${activeConfig.defaultModel}`, 'info', 'config')
+        }
+      }
+      if (!judgeModel) {
+        const activeConfig = llmConfigs.find(c => c.isActive) || llmConfigs[0]
+        if (activeConfig) {
+          setJudgeModel(activeConfig.defaultModel)
+          setJudgeProvider(activeConfig.provider)
+          addMessage(`Set default judge model: ${activeConfig.defaultModel}`, 'info', 'config')
+        }
       }
     }
-  }, [llmConfigs, testProvider, testModel, judgeProvider, judgeModel])
+  }, [llmConfigs, configLoading, testModel, judgeModel])
+
+  useEffect(() => {
+    if (configLoading) {
+      addMessage('Loading LLM configuration...', 'info', 'config')
+    }
+  }, [configLoading])
 
   return (
     <>
-      <StatusAlerts
+      <ActivityConsole
         configLoading={configLoading}
         llmConfigs={llmConfigs}
-        submitMessage={submitMessage}
       />
 
       <Scoreboard
         attempts={attempts}
         wins={wins}
         isSubmitting={isSubmitting}
+        batchResults={batchResults}
       />
 
       <CRow>
@@ -117,25 +184,23 @@ const JsonPromptForm = () => {
                 <LLMConfigSelector
                   llmConfigs={llmConfigs}
                   configLoading={configLoading}
-                  testProvider={testProvider}
                   testModel={testModel}
-                  judgeProvider={judgeProvider}
                   judgeModel={judgeModel}
-                  onTestProviderChange={handleTestProviderChange}
-                  onTestModelChange={setTestModel}
-                  onJudgeProviderChange={handleJudgeProviderChange}
-                  onJudgeModelChange={setJudgeModel}
+                  onTestModelChange={handleTestModelChange}
+                  onJudgeModelChange={handleJudgeModelChange}
                 />
 
                 <PromptFormFields
                   prompt={prompt}
                   idealResponse={idealResponse}
                   criteriaJson={criteriaJson}
+                  judgeSystemPrompt={judgeSystemPrompt}
                   maxTry={maxTry}
                   isSubmitting={isSubmitting}
                   onPromptChange={setPrompt}
                   onIdealResponseChange={setIdealResponse}
                   onCriteriaJsonChange={setCriteriaJson}
+                  onJudgeSystemPromptChange={setJudgeSystemPrompt}
                   onMaxTryChange={setMaxTry}
                   onJsonValid={handleJsonValid}
                 />

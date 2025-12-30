@@ -8,7 +8,7 @@ export class LlmService {
   private currentProvider: LLMProviderConfig | null = null;
   private defaultOptions: any = {};
 
-  constructor(private configService: ConfigService) {}
+  constructor(private configService: ConfigService) { }
 
   /**
    * Get provider config by model name (assumes model format: provider/model)
@@ -88,13 +88,16 @@ export class LlmService {
   async generateResponse(prompt: string, options: any = {}): Promise<string> {
     const model = options.model || this.defaultOptions.model;
     const provider = options.provider;
+
     if (!provider) {
       throw new Error('Provider must be specified in options');
     }
+
     const providerConfig = this.getConfigByProvider(provider);
     if (!providerConfig) {
       throw new Error(`No provider found for provider: ${provider}`);
     }
+
     if (!providerConfig.models.includes(model)) {
       throw new Error(`Model ${model} not available for provider ${provider}`);
     }
@@ -107,19 +110,23 @@ export class LlmService {
       !this.currentProvider ||
       this.currentProvider.id !== providerConfig.id
     ) {
+      console.log(`[LLM Service] Configuring provider: ${providerConfig.provider}`);
       this.configureProvider(providerConfig);
     }
 
     if (!this.client) {
+      console.error(`[LLM Service] Client not configured after provider setup`);
       throw new Error(
         'LLM provider not configured. Please call configureProvider() first.',
       );
     }
 
     if (!prompt || typeof prompt !== 'string') {
+      console.error(`[LLM Service] Invalid prompt:`, { prompt, type: typeof prompt });
       throw new Error('Prompt is required and must be a string');
     }
 
+    console.log("call llm prompot ---->", prompt)
     const completionOptions = {
       ...this.defaultOptions,
       ...clientOptions,
@@ -138,7 +145,14 @@ export class LlmService {
         case 'openai': {
           const completion =
             await this.client.chat.completions.create(completionOptions);
+
           response = completion.choices[0]?.message?.content || '';
+          console.log("llm response --->", completion.choices[0].message)
+
+          if (!response) {
+            console.warn(`[LLM Service] OpenAI returned empty response for ${model}`);
+          }
+
           break;
         }
         default:
@@ -147,7 +161,7 @@ export class LlmService {
 
       return response;
     } catch (error) {
-      console.error('LLM Service Error:', error);
+      console.error(`[LLM Service] API call failed: ${error.message}`);
       throw new Error(`Failed to get LLM response: ${error.message}`);
     }
   }
@@ -183,6 +197,7 @@ export class LlmService {
     }
 
     if (!Array.isArray(messages) || messages.length === 0) {
+      console.error(`[LLM Service] Invalid messages array:`, { messages, isArray: Array.isArray(messages) });
       throw new Error('Messages array is required and must not be empty');
     }
 
@@ -202,7 +217,13 @@ export class LlmService {
         case 'openai': {
           const completion =
             await this.client.chat.completions.create(completionOptions);
+
           response = completion.choices[0]?.message?.content || '';
+
+          if (!response) {
+            console.warn(`[LLM Service] OpenAI returned empty response for evaluation`);
+          }
+
           break;
         }
         default:
@@ -211,7 +232,7 @@ export class LlmService {
 
       return response;
     } catch (error) {
-      console.error('LLM Service Error:', error);
+      console.error(`[LLM Service] Messages API call failed: ${error.message}`);
       throw new Error(`Failed to get LLM response: ${error.message}`);
     }
   }

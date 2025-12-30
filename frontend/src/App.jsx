@@ -12,6 +12,7 @@ import './scss/examples.scss'
 
 // Contexts
 import { AuthProvider } from './contexts/AuthContext'
+import { LogProvider } from './contexts/LogContext'
 
 // Containers
 const DefaultLayout = React.lazy(() => import('./layout/DefaultLayout'))
@@ -46,7 +47,8 @@ const App = () => {
   return (
     <Provider store={store}>
       <HashRouter>
-        <AuthProvider>
+        <LogProvider>
+          <AuthProvider>
           <Suspense
             fallback={
               <div className="pt-3 text-center">
@@ -70,7 +72,8 @@ const App = () => {
               />
             </Routes>
           </Suspense>
-        </AuthProvider>
+          </AuthProvider>
+        </LogProvider>
       </HashRouter>
     </Provider>
   )

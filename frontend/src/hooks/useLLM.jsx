@@ -19,6 +19,7 @@ const TEST_MODEL_OPTIONS = {
  */
 const JUDGE_MODEL = {
   temperature: 1,
+  reasoning_effort: "medium"
   // top_p: 0,
 }
 
@@ -38,11 +39,12 @@ const useLLM = () => {
   /** @type {boolean} Whether a submission is currently in progress */
   const [isSubmitting, setIsSubmitting] = useState(false)
   /** @type {string} Current status message for user feedback */
-  const [submitMessage, setSubmitMessage] = useState('')
+
   /** @type {Array<{id: string, content: string}>} Raw text responses from judge evaluations with IDs */
   const [judgeTextResponses, setJudgeTextResponses] = useState([])
   /** @type {Array<{id: string, gradingBasis: Object, score: number}>} Parsed evaluation results from judge responses with IDs */
   const [judgeParseResponses, setJudgeParsedResponses] = useState([])
+  const [batchResults, setBatchResults] = useState({}) // Store batch-level results
   /** @type {number} Total number of attempts made in batch operations */
   const [attempts, setAttempts] = useState(0)
   /** @type {number} Number of successful evaluations (wins) */
@@ -87,10 +89,12 @@ const useLLM = () => {
    * @param {string} judgeModel - Model to use for evaluation
    * @returns {Promise<boolean|null>} Evaluation result
    */
-  const addManualResponse = async (prompt, response, validatedJson, judgeProvider, judgeModel) => {
+  const addManualResponse = async (prompt, response, validatedJson, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId) => {
+    if (onProgress) onProgress('Adding manual response for evaluation...')
+
     const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    setModelResponses(prev => [{ id: responseId, content: response }, ...prev])
-    await evaluate(responseId, validatedJson, prompt, response, judgeProvider, judgeModel)
+    setModelResponses(prev => [{ id: responseId, content: response, runId }, ...prev])
+    await evaluate(responseId, validatedJson, prompt, response, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId)
   }
 
   /**
@@ -100,20 +104,65 @@ const useLLM = () => {
     if (abortController) {
       abortController.abort()
       setIsSubmitting(false)
-      setSubmitMessage('Batch operation cancelled')
     }
   }
 
   /**
    * Reset all results and counters to initial state
    */
+  // Analyze batch diversity criteria
+  const analyzeBatchDiversity = (runId) => {
+    // Get all parsed responses for this run
+    const runResponses = judgeParseResponses.filter(r => r.runId === runId)
+
+    if (runResponses.length === 0) return null
+
+    // Get grading basis from first response to know criteria names
+    const firstResponse = runResponses[0]
+    if (!firstResponse.gradingBasis) return null
+
+    const criteriaNames = Object.keys(firstResponse.gradingBasis)
+    let diverseCriteriaCount = 0
+
+    // For each criteria, check if it has both PASS and FAIL across all attempts
+    for (const criteriaName of criteriaNames) {
+      const results = runResponses.map(r => r.gradingBasis[criteriaName])
+      const hasPass = results.includes('PASS')
+      const hasFail = results.includes('FAIL')
+
+      if (hasPass && hasFail) {
+        diverseCriteriaCount++
+      }
+    }
+
+    // Most criteria (more than half) must have diversity
+    const requiredDiversity = Math.ceil(criteriaNames.length / 2)
+    const batchWin = diverseCriteriaCount >= requiredDiversity
+
+    const batchResult = {
+      runId,
+      totalCriteria: criteriaNames.length,
+      diverseCriteria: diverseCriteriaCount,
+      requiredDiversity,
+      batchWin,
+      criteriaDetails: criteriaNames.map(name => ({
+        name,
+        hasDiversity: runResponses.some(r => r.gradingBasis[name] === 'PASS') &&
+                     runResponses.some(r => r.gradingBasis[name] === 'FAIL')
+      }))
+    }
+
+    setBatchResults(prev => ({ ...prev, [runId]: batchResult }))
+    return batchResult
+  }
+
   const resetResults = () => {
     setModelResponses([])
     setJudgeTextResponses([])
     setJudgeParsedResponses([])
+    setBatchResults({})
     setAttempts(0)
     setWins(0)
-    setSubmitMessage('')
   }
 
   /**
@@ -126,33 +175,54 @@ const useLLM = () => {
    * @param {string} judgeModel - Model to use for judging responses
    * @returns {Promise<boolean|null>} True if evaluation passed, false if failed, null if error
    */
-  const runTestModel = async (prompt, criteria, testProvider, testModel, judgeProvider, judgeModel) => {
+  const runTestModel = async (prompt, criteria, testProvider, testModel, judgeProvider, judgeModel, onProgress, runId, judgeSystemPrompt) => {
     if (!prompt.trim()) {
-      setSubmitMessage('Please provide a prompt')
-      return
+      throw new Error('Please provide a prompt')
     }
 
     setIsSubmitting(true)
-    setSubmitMessage('')
 
     try {
-      console.log('Calling LLM with: \n', prompt)
+      if (onProgress) onProgress('Starting model generation...')
 
       // Call the LLM using the backend API
-      const response = await llmApi.generateResponse(prompt, { ...TEST_MODEL_OPTIONS, model: testModel, provider: testProvider })
-      const llmResponse = response.data.response
+      if (onProgress) onProgress('Generating response...')
 
-      setSubmitMessage(`LLM Response: ${llmResponse}`)
+      const requestOptions = { ...TEST_MODEL_OPTIONS, model: testModel, provider: testProvider }
+      const response = await llmApi.generateResponse(prompt, requestOptions)
+
+      const llmResponse = response.data?.response || ''
+
+      if (!llmResponse || llmResponse.trim().length === 0) {
+        console.warn(`Empty response from ${testModel}`)
+        if (onProgress) onProgress('Warning: Empty response from model')
+      }
+
+      if (onProgress) onProgress(`Response generated (${llmResponse.length} chars)`)
+
       const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // Always store the response, even if empty
       setModelResponses((responses) => {
-        return [...responses, { id: responseId, content: llmResponse }]
+        return [...responses, { id: responseId, content: llmResponse, runId }]
       })
-      const res = await evaluate(responseId, criteria, prompt, llmResponse, judgeProvider, judgeModel)
-      return res
+
+      if (onProgress) onProgress('Starting evaluation...')
+
+      try {
+        const res = await evaluate(responseId, criteria, prompt, llmResponse, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId)
+
+        if (onProgress) onProgress(`Evaluation completed: ${res ? 'PASS' : 'FAIL'}`)
+        return res
+      } catch (evalError) {
+        console.error('Evaluation failed:', evalError)
+        if (onProgress) onProgress(`Evaluation failed: ${evalError.message}`)
+        throw evalError
+      }
     } catch (error) {
       console.error('LLM call failed:', error)
-      setSubmitMessage(`Error: ${error.message}`)
-      return null
+      if (onProgress) onProgress(`Model generation failed: ${error.message}`)
+      throw error // Re-throw to let caller handle logging
     } finally {
       setIsSubmitting(false)
     }
@@ -166,207 +236,21 @@ const useLLM = () => {
    * @param {string} llmResponse - The response from the test model to evaluate
    * @param {string} judgeProvider - Provider to use for the judge model
    * @param {string} judgeModel - Model to use for evaluation
-   * @returns {Promise<boolean|null>} False if evaluation passed (score=0 means failure), true if failed, null if error
+    * @returns {Promise<boolean>} True if evaluation passed (score > 0 means success), false if failed
    */
-  const evaluate = async (responseId, validatedJson, prompt, llmResponse, judgeProvider, judgeModel) => {
+  const evaluate = async (responseId, validatedJson, prompt, llmResponse, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId) => {
+    console.log('Evaluate called with judgeSystemPrompt:', judgeSystemPrompt ? 'present' : 'empty', judgeSystemPrompt?.length || 0, 'chars')
+
     if (!validatedJson) {
-      setSubmitMessage('Please provide valid JSON criteria array')
-      return
+      throw new Error('Please provide valid JSON criteria array')
     }
 
-    if (!llmResponse) {
-      setSubmitMessage('Please call the model first to generate a response')
-      return
+    // Allow empty responses for evaluation (they should fail criteria)
+    if (llmResponse === undefined || llmResponse === null) {
+      llmResponse = ''
     }
 
     setIsSubmitting(true)
-    setSubmitMessage('Starting evaluation...')
-
-    const judgeSystemPrompt = `You are acting as a strict grading evaluator. Your sole responsibility is to assess the student's reply based exclusively on the response_reference. You must disregard intent, effort, or external knowledge. Literal compliance is the only metric for success.
-
-STANDARD EVALUATION CRITERIA
-
-Each criterion must be evaluated independently as PASS or FAIL: [{"id": "C1", "criteria": "Is the response formatted as a vertical stack of exactly nine (9) unique lines, with exactly one word per line, no punctuation, no indentation, and no extra spaces?"},
-
-{"id": "C2", "criteria": "Does the response include the exact phrase 'locked protocol seed' written verbatim on a single line, with no changes to spelling, spacing, capitalization, or word order?"},
-
-{"id": "C3", "criteria": "Does the response avoid the letter 'a' (in any case) in every word outside the exact phrase 'locked protocol seed'?"},
-
-{"id": "C4", "criteria": "Does the response suggest an object or action involving IT-support relevant to academic or research settings, without additional details, examples, explanations, horizontal text, or sentences?"} ]
-
-STRICT CRITERION EVALUATION RULES
-
-Each criterion must be evaluated independently.
-
-Assign PASS only if the response fully and literally satisfies the criterion.
-
-Assign FAIL if there is any deviation, missing element, extra information, implied multiple actions, or correction of the passage.
-
-Literal compliance is mandatory. Interpretation, assumption, or external knowledge is not allowed.
-
-GRADING SCALE
-
-For each response, assign exactly one score:
-
-1 point (PASS)
-
-0 points (FAIL)
-
-Let:
-
-N = total number of criteria (4)
-
-P = number of criteria marked PASS
-
-Scoring Rule:
-
-P > N / 2 → 1 point (PASS)
-
-P ≤ N / 2 → 0 points (FAIL)
-
-Only the number of PASS criteria matters. Do not consider intent, inferred meaning, or partial correctness.
-
-REQUIRED OUTPUT FORMAT
-
-Your output must follow this exact sequence:
-
-[Grading Basis]:
-
-{"C1": "PASS or FAIL",
-
-"C2": "PASS or FAIL",
-
-"C3": "PASS or FAIL",
-
-"C4": "PASS or FAIL"}
-
-[Score]: X point(s)
-
-[JSON]: {"answer_score": X}
-
-[Explanation]: A brief statement explaining which criteria failed and why. If all passed, state "All criteria satisfied."
-
-EVALUATION EXAMPLES
-
-Example 1: Correct (1 point)
-
-Student Answer:
-
-Reboot
-
-System
-
-locked protocol seed
-
-Login
-
-Prompt
-
-Script
-
-Update
-
-Monitor
-
-Tools
-
-[Grading Basis]:
-
-{"C1": "PASS",
-
-"C2": "PASS",
-
-"C3": "PASS",
-
-"C4": "PASS"}
-
-[Score]: 1 point
-
-[JSON]: {"answer_score": 1}
-
-[Explanation]: All criteria satisfied. The response is vertical, contains exactly 9 words, avoids the letter 'a' outside the phrase, and relates to IT.
-
-Example 2: Incorrect (0 points - Multiple Failures)
-
-Student Answer:
-
-Password
-
-locked
-
-protocol
-
-seed
-
-Resetting
-
-The
-
-Database
-
-Now
-
-Support
-
-Help
-
-Tools
-
-[Grading Basis]:
-
-{"C1": "PASS",
-
-"C2": "PASS",
-
-"C3": "FAIL",
-
-"C4": "FAIL"}
-
-[Score]: 0 points
-
-[JSON]: {"answer_score": 0}
-
-[Explanation]: C3 failed because the letter 'a' is found in "Password" and "Database". C4 failed because the vertical list forms a sentence fragment ("Resetting the database now"), which violates the prohibition on sentences.
-
-Example 3: Correct (1 point - Threshold Met)
-
-Student Answer:
-
-Login
-
-User
-
-locked
-
-protocol
-
-seed
-
-Monitor
-
-Script
-
-Ping
-
-Port
-
-[Grading Basis]: {"C1": "PASS",
-
-"C2": "PASS",
-
-"C3": "PASS",
-
-"C4": "FAIL"}
-
-[Score]: 1 point
-
-[JSON]: {"answer_score": 1}
-
-[Explanation]: C4 failed because "User" and "Reset" are general terms, but because C1, C2, and C3 are fully satisfied, the score is 1 point (75% pass rate).
-
-CLOSING STATEMENT
-
-Remember, you must be very strict when grading the student's answer. Award it with 1 point only if you are fully satisfied that more than 50% of the criteria are met.`
 
     try {
       // Fill the judge prompt template
@@ -403,19 +287,28 @@ ${llmResponse}
         },
       ]
 
+      console.log('Judge API call messages:', {
+        systemMessageLength: judgeSystemPrompt?.length || 0,
+        userMessageLength: judgePrompt?.length || 0,
+        systemContentPreview: judgeSystemPrompt?.substring(0, 100) + '...'
+      })
+
       // Call the LLM using the backend API with messages
       const response = await llmApi.generateResponseWithMessages(messages, { ...JUDGE_MODEL, model: judgeModel, provider: judgeProvider })
-      console.log("llm rsponse", response)
       const judgeResponse = response.data.response
-      setJudgeTextResponses(r => [...r, { id: responseId, content: judgeResponse }])
+
+      setJudgeTextResponses(r => [...r, { id: responseId, content: judgeResponse, runId }])
       const e = parseEvaluation(judgeResponse)
-      console.log("extracted", e)
-      setJudgeParsedResponses(r => [...r, { id: responseId, ...e }])
-      return e.score == 0
+      setJudgeParsedResponses(r => [...r, { id: responseId, ...e, runId }])
+
+      const passed = e.score > 0
+      if (onProgress) onProgress(`Evaluation: ${passed ? 'PASS' : 'FAIL'}`)
+
+      return passed
 
     } catch (error) {
       console.error('Judge evaluation failed:', error)
-      setSubmitMessage(`Error: ${error.message}`)
+      throw error // Re-throw to let caller handle logging
     } finally {
       setIsSubmitting(false)
     }
@@ -433,26 +326,73 @@ ${llmResponse}
    * @param {string} judgeProvider - Provider for judge model
    * @param {string} judgeModel - Model for evaluation
    */
-  const batch = async (prompt, criteria, maxTry = 10, goal = 4, testProvider, testModel, judgeProvider, judgeModel) => {
+  const batch = async (prompt, criteria, maxTry = 10, goal = 4, testProvider, testModel, judgeProvider, judgeModel, judgeSystemPrompt, onProgress, runId) => {
     const controller = new AbortController()
     setAbortController(controller)
     setAttempts(0)
     setWins(0)
     let localWin = 0
     let localAttempts = 0
-    console.log("run batch", maxTry, goal)
+
+    if (onProgress) onProgress(`Starting batch: ${maxTry} attempts, goal ${goal} wins`)
+
     try {
       while (localAttempts < maxTry && localWin < goal && !controller.signal.aborted) {
+        localAttempts++
+        if (onProgress) onProgress(`Attempt ${localAttempts}/${maxTry} - Starting...`)
+
         try {
-          const res = await runTestModel(prompt, criteria, testProvider, testModel, judgeProvider, judgeModel)
-          localAttempts++
+          const res = await runTestModel(prompt, criteria, testProvider, testModel, judgeProvider, judgeModel,
+            (progressMsg) => onProgress && onProgress(`Attempt ${localAttempts}/${maxTry} - ${progressMsg}`), runId, judgeSystemPrompt)
+
           if (res) {
             localWin++
           }
-          setAttempts((prev) => prev++)
-          await sleep(500)
+
+          if (onProgress) onProgress(`Attempt ${localAttempts}/${maxTry} - ${res ? 'PASS' : 'FAIL'} (${localWin}/${goal} wins)`)
+
+          setAttempts(localAttempts)
+          setWins(localWin)
+
+          // Check if goal reached
+          if (localWin >= goal) {
+            if (onProgress) onProgress(`🎉 Goal reached! ${localWin}/${goal} wins achieved in ${localAttempts} attempts`)
+            break
+          }
+
         } catch (e) {
-          await sleep(500)
+          // Parsing failed - this counts as an attempt but not a win/loss
+          if (onProgress) onProgress(`Attempt ${localAttempts}/${maxTry} - PARSING FAILED: ${e.message}`)
+          setAttempts(localAttempts)
+          // Don't increment wins for failed parsing
+        }
+
+        await sleep(500)
+      }
+
+      if (onProgress) {
+        if (controller.signal.aborted) {
+          onProgress('Batch cancelled by user')
+        } else {
+          // Analyze batch diversity
+          const batchAnalysis = analyzeBatchDiversity(runId)
+
+          if (batchAnalysis) {
+            const batchStatus = batchAnalysis.batchWin ? '🎉 SUCCESS' : '❌ FAILURE'
+            const diversityMsg = `${batchAnalysis.diverseCriteria}/${batchAnalysis.totalCriteria} criteria diverse`
+
+            if (localWin >= goal) {
+              onProgress(`${batchStatus} - Goal reached! ${localWin}/${goal} wins (${diversityMsg})`)
+            } else {
+              onProgress(`${batchStatus} - Completed: ${localWin} wins, ${localAttempts} attempts (${diversityMsg})`)
+            }
+          } else {
+            if (localWin >= goal) {
+              onProgress(`🎉 Goal reached! ${localWin}/${goal} wins achieved in ${localAttempts} attempts`)
+            } else {
+              onProgress(`Batch completed: ${localWin} wins, ${localAttempts} attempts (goal not reached)`)
+            }
+          }
         }
       }
     } finally {
@@ -462,34 +402,22 @@ ${llmResponse}
 
   return {
     // State
-    /** @type {LLMProviderConfig[]} Available LLM provider configurations */
     llmConfigs,
-    /** @type {boolean} Whether configurations are loading */
     configLoading,
-    /** @type {Array<{id: string, content: string}>} Model response objects with IDs */
     modelResponses,
-    /** @type {Array<{id: string, gradingBasis: Object, score: number}>} Parsed judge evaluation results with IDs */
     judgeParseResponses,
-    /** @type {Array<{id: string, content: string}>} Raw judge response texts with IDs */
     judgeTextResponses,
-    /** @type {number} Number of successful evaluations */
     wins,
-    /** @type {number} Total number of attempts */
     attempts,
-    /** @type {boolean} Whether an operation is in progress */
+    batchResults,
     isSubmitting,
-    /** @type {string} Current status message */
-    submitMessage,
 
     // Actions
-    /** @type {Function} Run batch testing */
     batch,
-    /** @type {Function} Add and evaluate manual response */
     addManualResponse,
-    /** @type {Function} Cancel current batch operation */
     cancelBatch,
-    /** @type {Function} Reset all results */
     resetResults,
+    analyzeBatchDiversity,
   }
 }
 

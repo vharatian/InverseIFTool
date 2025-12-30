@@ -54,9 +54,31 @@ const ResultsAccordion = ({
     }
   }
 
+  // Create a human-readable ID from the response ID and index
+  const getReadableId = (response, index) => {
+    // Extract timestamp from ID format: response_{timestamp}_{random}
+    const idParts = response.id.split('_')
+    if (idParts.length >= 2) {
+      try {
+        const timestamp = parseInt(idParts[1])
+        const time = new Date(timestamp).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })
+        const runDisplay = response.runId ? `[${response.runId.split('_')[1]}] ` : ''
+        return `Run ${runDisplay}`
+      } catch (e) {
+        // Fallback if timestamp parsing fails
+      }
+    }
+    const runDisplay = response.runId ? `[${response.runId.split('_')[1]}] ` : ''
+    return `Run ${runDisplay}`
+  }
+
   return (
     <CRow>
-      <CAccordion activeItemKey={1}>
+      <CAccordion activeItemKey={1} className='mb-5'>
         {modelResponses.map((res, index) => {
           // Find matching judge responses by ID
           const judgeParsed = judgeParseResponses.find(j => j.id === res.id)
@@ -65,7 +87,7 @@ const ResultsAccordion = ({
           return (
             <CAccordionItem itemKey={index + 1} key={res.id}>
               <CAccordionHeader>
-                <strong style={{ marginRight: "10px" }}>Response {index + 1}</strong>
+                <strong style={{ marginRight: "10px" }}>{getReadableId(res, index)}</strong>
                 {judgeParsed && judgeParsed.gradingBasis ?
                   Object.keys(judgeParsed.gradingBasis).map(key => (
                     <CBadge
@@ -79,7 +101,7 @@ const ResultsAccordion = ({
                     style={{ marginRight: "10px" }}
                     color="danger"
                   >
-                    Parse Failed
+                    Judge Failed
                   </CBadge>
 
                 }
@@ -153,15 +175,18 @@ ResultsAccordion.propTypes = {
   modelResponses: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.string.isRequired,
     content: PropTypes.string.isRequired,
+    runId: PropTypes.string,
   })),
   judgeParseResponses: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.string.isRequired,
     gradingBasis: PropTypes.object,
     score: PropTypes.number,
+    runId: PropTypes.string,
   })),
   judgeTextResponses: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.string.isRequired,
     content: PropTypes.string.isRequired,
+    runId: PropTypes.string,
   })),
 }
 

@@ -1,5 +1,5 @@
 export { default as LLMConfigSelector } from './LLMConfigSelector'
 export { default as PromptFormFields } from './PromptFormFields'
 export { default as ResultsAccordion } from './ResultsAccordion'
-export { default as StatusAlerts } from './StatusAlerts'
+export { default as ActivityConsole } from './ActivityConsole'
 export { default as Scoreboard } from './Scoreboard'

@@ -14,14 +14,19 @@ import PropTypes from 'prop-types'
  * @param {number} props.attempts - Total number of attempts made
  * @param {number} props.wins - Number of successful evaluations
  * @param {boolean} props.isSubmitting - Whether a batch is currently running
+ * @param {Object} props.batchResults - Batch-level analysis results
  */
 const Scoreboard = ({
   attempts,
   wins,
   isSubmitting,
+  batchResults,
 }) => {
   const winRate = attempts > 0 ? Math.round((wins / attempts) * 100) : 0
   const lossRate = attempts > 0 ? 100 - winRate : 0
+
+  // Get the latest batch result
+  const latestBatchResult = batchResults && Object.values(batchResults).pop()
 
   return (
     <CRow className="mb-4">
@@ -74,6 +79,32 @@ const Scoreboard = ({
                 </CCol>
               </CRow>
             )}
+            {latestBatchResult && (
+              <CRow className="mt-3">
+                <CCol xs={12}>
+                  <div className="border-top pt-3">
+                    <h6 className="mb-2">Batch Diversity Analysis</h6>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <span>Diverse Criteria:</span>
+                      <span className="fw-bold">
+                        {latestBatchResult.diverseCriteria}/{latestBatchResult.totalCriteria}
+                      </span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <span>Required Diversity:</span>
+                      <span>{latestBatchResult.requiredDiversity}+ criteria</span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span>Batch Result:</span>
+                      <span className={`fw-bold ${latestBatchResult.batchWin ? 'text-success' : 'text-danger'}`}>
+                        {latestBatchResult.batchWin ? 'PASS ✅' : 'FAIL ❌'}
+                      </span>
+                    </div>
+                  </div>
+                </CCol>
+              </CRow>
+            )}
+
             {isSubmitting && (
               <CRow className="mt-3">
                 <CCol xs={12}>
@@ -94,6 +125,7 @@ Scoreboard.propTypes = {
   attempts: PropTypes.number,
   wins: PropTypes.number,
   isSubmitting: PropTypes.bool,
+  batchResults: PropTypes.object,
 }
 
 export default Scoreboard

@@ -11,11 +11,13 @@ import JsonArrayTextarea from '../../../components/JsonArrayTextarea'
  * @param {string} props.prompt - The prompt text
  * @param {string} props.idealResponse - The ideal response text
  * @param {string} props.criteriaJson - The criteria JSON string
+ * @param {string} props.judgeSystemPrompt - The judge system prompt
  * @param {number} props.maxTry - Maximum number of attempts
  * @param {boolean} props.isSubmitting - Whether form is submitting
  * @param {Function} props.onPromptChange - Handler for prompt change
  * @param {Function} props.onIdealResponseChange - Handler for ideal response change
  * @param {Function} props.onCriteriaJsonChange - Handler for criteria JSON change
+ * @param {Function} props.onJudgeSystemPromptChange - Handler for judge system prompt change
  * @param {Function} props.onMaxTryChange - Handler for max attempts change
  * @param {Function} props.onJsonValid - Handler for valid JSON
  */
@@ -23,11 +25,13 @@ const PromptFormFields = ({
   prompt,
   idealResponse,
   criteriaJson,
+  judgeSystemPrompt,
   maxTry,
   isSubmitting,
   onPromptChange,
   onIdealResponseChange,
   onCriteriaJsonChange,
+  onJudgeSystemPromptChange,
   onMaxTryChange,
   onJsonValid,
 }) => {
@@ -54,6 +58,20 @@ const PromptFormFields = ({
           onChange={(e) => onIdealResponseChange(e.target.value)}
           required
         />
+      </div>
+      <div className="mb-3">
+        <CFormLabel htmlFor="judgePromptTextarea">Judge System Prompt</CFormLabel>
+        <CFormTextarea
+          id="judgePromptTextarea"
+          rows={8}
+          placeholder="Enter the judge system prompt for evaluation..."
+          value={judgeSystemPrompt}
+          onChange={(e) => onJudgeSystemPromptChange(e.target.value)}
+          required
+        />
+        <small className="form-text text-muted">
+          This prompt instructs the judge model on how to evaluate responses against the criteria.
+        </small>
       </div>
       <div className="mb-3">
         <JsonArrayTextarea
@@ -91,11 +109,13 @@ PromptFormFields.propTypes = {
   prompt: PropTypes.string,
   idealResponse: PropTypes.string,
   criteriaJson: PropTypes.string,
+  judgeSystemPrompt: PropTypes.string,
   maxTry: PropTypes.number,
   isSubmitting: PropTypes.bool,
   onPromptChange: PropTypes.func.isRequired,
   onIdealResponseChange: PropTypes.func.isRequired,
   onCriteriaJsonChange: PropTypes.func.isRequired,
+  onJudgeSystemPromptChange: PropTypes.func.isRequired,
   onMaxTryChange: PropTypes.func.isRequired,
   onJsonValid: PropTypes.func.isRequired,
 }
