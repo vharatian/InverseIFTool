@@ -98,6 +98,8 @@ const useLLM = (addMessage) => {
    * @param {Array} validatedJson - Validation criteria array
    * @param {string} judgeProvider - Provider to use for evaluation
    * @param {string} judgeModel - Model to use for evaluation
+   * @param {string} judgeSystemPrompt - System prompt for judge
+   * @param {string} runId - Run identifier
    * @returns {Promise<boolean|null>} Evaluation result
    */
   const addManualResponse = async (
@@ -107,22 +109,20 @@ const useLLM = (addMessage) => {
     judgeProvider,
     judgeModel,
     judgeSystemPrompt,
-    onProgress,
     runId,
   ) => {
-    if (onProgress) onProgress('Adding manual response for evaluation...')
+    addMessage('Adding manual response for evaluation...', 'info', 'manual')
 
     const responseId = `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     setModelResponses((prev) => [{ id: responseId, content: response, runId }, ...prev])
-    await evaluate(
-      responseId,
+    await evaluateResponse(
+      response,
       validatedJson,
       prompt,
-      response,
-      judgeProvider,
+      responseId,
       judgeModel,
+      judgeProvider,
       judgeSystemPrompt,
-      onProgress,
       runId,
     )
   }
@@ -448,6 +448,7 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
           completed++
           if (result.status === 'fulfilled') {
             const { evaluation, score, category } = result.value
+            console.log('back category', category)
             // score() already called in run
             if (category === 'win') {
               wins++

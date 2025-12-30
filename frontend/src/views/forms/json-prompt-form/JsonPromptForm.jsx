@@ -134,7 +134,6 @@ const JsonPromptForm = () => {
           judgeProvider,
           judgeModel,
           judgeSystemPrompt,
-          (progressMsg) => addMessage(progressMsg, 'info', 'test'),
           runId,
         )
 
