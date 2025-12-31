@@ -60,7 +60,7 @@ export class LlmController implements OnModuleInit {
 
     console.log(`[LLM Controller] Generate with messages request received:`, {
       messagesCount: messages?.length || 0,
-      hasSystemMessage: messages?.some(m => m.role === 'system') || false,
+      hasSystemMessage: messages?.some((m) => m.role === 'system') || false,
       hasOptions: !!options,
       provider: options?.provider,
       model: options?.model,
@@ -82,12 +82,15 @@ export class LlmController implements OnModuleInit {
       return { response };
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(`[LLM Controller] Generate with messages failed after ${duration}ms:`, {
-        error: error.message,
-        messagesCount: messages?.length,
-        provider: options?.provider,
-        model: options?.model,
-      });
+      console.error(
+        `[LLM Controller] Generate with messages failed after ${duration}ms:`,
+        {
+          error: error.message,
+          messagesCount: messages?.length,
+          provider: options?.provider,
+          model: options?.model,
+        },
+      );
       throw error;
     }
   }

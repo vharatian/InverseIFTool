@@ -10,7 +10,7 @@ import JsonArrayTextarea from '../../../components/JsonArrayTextarea'
  * @param {string} props.criteriaJson - The criteria JSON string
  * @param {string} props.judgeSystemPrompt - The judge system prompt
  * @param {number} props.maxTry - Maximum number of attempts
- * @param {boolean} props.isSubmitting - Whether form is submitting
+  * @param {boolean} props.isRunning - Whether form is running
  * @param {Function} props.onPromptChange - Handler for prompt change
  * @param {Function} props.onIdealResponseChange - Handler for ideal response change
  * @param {Function} props.onCriteriaJsonChange - Handler for criteria JSON change
@@ -24,7 +24,7 @@ const PromptFormFields = ({
   criteriaJson,
   judgeSystemPrompt,
   maxTry,
-  isSubmitting,
+  isRunning,
   onPromptChange,
   onIdealResponseChange,
   onCriteriaJsonChange,
@@ -91,7 +91,7 @@ const PromptFormFields = ({
             }
             min="1"
             max="100"
-            disabled={isSubmitting}
+            disabled={isRunning}
           />
           <small className="form-text text-muted">
             Maximum number of evaluation attempts (1-100)
@@ -108,7 +108,7 @@ PromptFormFields.propTypes = {
   criteriaJson: PropTypes.string,
   judgeSystemPrompt: PropTypes.string,
   maxTry: PropTypes.number,
-  isSubmitting: PropTypes.bool,
+  isRunning: PropTypes.bool,
   onPromptChange: PropTypes.func.isRequired,
   onIdealResponseChange: PropTypes.func.isRequired,
   onCriteriaJsonChange: PropTypes.func.isRequired,

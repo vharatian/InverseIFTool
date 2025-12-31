@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
 import { ConfigService, LLMProviderConfig } from '../config/config.service';
+import { Socket } from 'socket.io';
 
 @Injectable()
 export class LlmService {
@@ -8,7 +9,7 @@ export class LlmService {
   private currentProvider: LLMProviderConfig | null = null;
   private defaultOptions: any = {};
 
-  constructor(private configService: ConfigService) {}
+  constructor(private configService: ConfigService) { }
 
   /**
    * Get provider config by model name (assumes model format: provider/model)
@@ -94,7 +95,8 @@ export class LlmService {
       provider,
       model,
       promptLength: prompt?.length || 0,
-      promptPreview: prompt?.substring(0, 200) + (prompt?.length > 200 ? '...' : ''),
+      promptPreview:
+        prompt?.substring(0, 200) + (prompt?.length > 200 ? '...' : ''),
       options: { ...options, provider: '[REDACTED]' },
       timestamp: new Date().toISOString(),
     });
@@ -127,7 +129,9 @@ export class LlmService {
     }
 
     if (!this.client) {
-      console.error(`[LLM Service] ${requestId} Client not configured after provider setup`);
+      console.error(
+        `[LLM Service] ${requestId} Client not configured after provider setup`,
+      );
       throw new Error(
         'LLM provider not configured. Please call configureProvider() first.',
       );
@@ -168,6 +172,7 @@ export class LlmService {
             await this.client.chat.completions.create(completionOptions);
 
           response = completion.choices[0]?.message?.content || '';
+          console.log('response message', completion.choices[0]?.message);
           const finishReason = completion.choices[0]?.finish_reason;
 
           const duration = Date.now() - startTime;
@@ -177,11 +182,13 @@ export class LlmService {
             isEmpty: response.length === 0,
             finishReason,
             model,
-            usage: completion.usage ? {
-              promptTokens: completion.usage.prompt_tokens,
-              completionTokens: completion.usage.completion_tokens,
-              totalTokens: completion.usage.total_tokens,
-            } : undefined,
+            usage: completion.usage
+              ? {
+                promptTokens: completion.usage.prompt_tokens,
+                completionTokens: completion.usage.completion_tokens,
+                totalTokens: completion.usage.total_tokens,
+              }
+              : undefined,
             timestamp: new Date().toISOString(),
           });
 
@@ -200,13 +207,16 @@ export class LlmService {
       return response;
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(`[LLM Service] ${requestId} API call failed after ${duration}ms:`, {
-        error: error.message,
-        provider,
-        model,
-        stack: error.stack?.split('\n')[0], // First line of stack trace
-        timestamp: new Date().toISOString(),
-      });
+      console.error(
+        `[LLM Service] ${requestId} API call failed after ${duration}ms:`,
+        {
+          error: error.message,
+          provider,
+          model,
+          stack: error.stack?.split('\n')[0], // First line of stack trace
+          timestamp: new Date().toISOString(),
+        },
+      );
       throw new Error(`Failed to get LLM response: ${error.message}`);
     }
   }
@@ -229,27 +239,34 @@ export class LlmService {
     console.log(`[LLM Service] ${requestId} Starting messages request:`, {
       provider: provider || this.currentProvider?.provider,
       messagesCount: messages?.length || 0,
-      hasSystemMessage: messages?.some(m => m.role === 'system') || false,
+      hasSystemMessage: messages?.some((m) => m.role === 'system') || false,
       options: { ...options, provider: '[REDACTED]' },
       timestamp: new Date().toISOString(),
     });
 
     // Log system message if present
-    const systemMessage = messages?.find(m => m.role === 'system');
+    const systemMessage = messages?.find((m) => m.role === 'system');
     if (systemMessage) {
       console.log(`[LLM Service] ${requestId} System message:`, {
         length: systemMessage.content?.length || 0,
-        preview: systemMessage.content?.substring(0, 300) + (systemMessage.content?.length > 300 ? '...' : ''),
+        preview:
+          systemMessage.content?.substring(0, 300) +
+          (systemMessage.content?.length > 300 ? '...' : ''),
       });
     }
 
     // Log user message content (truncated for readability)
-    const userMessages = messages?.filter(m => m.role === 'user') || [];
+    const userMessages = messages?.filter((m) => m.role === 'user') || [];
     if (userMessages.length > 0) {
       console.log(`[LLM Service] ${requestId} User messages:`, {
         count: userMessages.length,
-        totalLength: userMessages.reduce((sum, m) => sum + (m.content?.length || 0), 0),
-        preview: userMessages[0].content?.substring(0, 500) + (userMessages[0].content?.length > 500 ? '...' : ''),
+        totalLength: userMessages.reduce(
+          (sum, m) => sum + (m.content?.length || 0),
+          0,
+        ),
+        preview:
+          userMessages[0].content?.substring(0, 500) +
+          (userMessages[0].content?.length > 500 ? '...' : ''),
       });
     }
 
@@ -298,12 +315,15 @@ export class LlmService {
 
       switch (this.providerType) {
         case 'openai': {
-          console.log(`[LLM Service] ${requestId} Sending messages to OpenAI:`, {
-            model: completionOptions.model,
-            messagesCount: completionOptions.messages.length,
-            temperature: completionOptions.temperature,
-            maxTokens: completionOptions.max_tokens,
-          });
+          console.log(
+            `[LLM Service] ${requestId} Sending messages to OpenAI:`,
+            {
+              model: completionOptions.model,
+              messagesCount: completionOptions.messages.length,
+              temperature: completionOptions.temperature,
+              maxTokens: completionOptions.max_tokens,
+            },
+          );
 
           const completion =
             await this.client.chat.completions.create(completionOptions);
@@ -318,12 +338,15 @@ export class LlmService {
             isEmpty: response.length === 0,
             finishReason,
             model: completionOptions.model,
-            usage: completion.usage ? {
-              promptTokens: completion.usage.prompt_tokens,
-              completionTokens: completion.usage.completion_tokens,
-              totalTokens: completion.usage.total_tokens,
-            } : undefined,
-            responsePreview: response.substring(0, 200) + (response.length > 200 ? '...' : ''),
+            usage: completion.usage
+              ? {
+                promptTokens: completion.usage.prompt_tokens,
+                completionTokens: completion.usage.completion_tokens,
+                totalTokens: completion.usage.total_tokens,
+              }
+              : undefined,
+            responsePreview:
+              response.substring(0, 200) + (response.length > 200 ? '...' : ''),
             timestamp: new Date().toISOString(),
           });
 
@@ -342,13 +365,16 @@ export class LlmService {
       return response;
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(`[LLM Service] ${requestId} Messages API call failed after ${duration}ms:`, {
-        error: error.message,
-        provider: this.currentProvider?.provider,
-        messagesCount: messages.length,
-        stack: error.stack?.split('\n')[0], // First line of stack trace
-        timestamp: new Date().toISOString(),
-      });
+      console.error(
+        `[LLM Service] ${requestId} Messages API call failed after ${duration}ms:`,
+        {
+          error: error.message,
+          provider: this.currentProvider?.provider,
+          messagesCount: messages.length,
+          stack: error.stack?.split('\n')[0], // First line of stack trace
+          timestamp: new Date().toISOString(),
+        },
+      );
       throw new Error(`Failed to get LLM response: ${error.message}`);
     }
   }
@@ -367,6 +393,312 @@ export class LlmService {
    */
   isConfigured(): boolean {
     return this.client !== null && this.currentProvider !== null;
+  }
+
+  /**
+   * Generate a streaming response using the configured LLM provider
+   * @param prompt - The prompt to send
+   * @param options - Additional options for the request
+   * @param client - WebSocket client to emit chunks to
+   */
+  async generateResponseStream(
+    prompt: string,
+    options: any = {},
+    client: Socket,
+    id?: string,
+  ): Promise<void> {
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const model = options.model || this.defaultOptions.model;
+    const provider = options.provider;
+
+    console.log(`[LLM Service Stream] ${requestId} Starting stream request:`, {
+      provider,
+      model,
+      promptLength: prompt?.length || 0,
+      promptPreview:
+        prompt?.substring(0, 200) + (prompt?.length > 200 ? '...' : ''),
+      options: { ...options, provider: '[REDACTED]' },
+      clientId: client.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!prompt || typeof prompt !== 'string') {
+      console.error(`[LLM Service Stream] ${requestId} Invalid prompt:`, {
+        prompt,
+        type: typeof prompt,
+      });
+      throw new Error('Prompt is required and must be a string');
+    }
+
+    await this.performStreaming(
+      requestId,
+      'prompt',
+      prompt,
+      options,
+      client,
+      id,
+    );
+  }
+
+  async generateResponseWithMessagesStream(
+    messages: any[],
+    options: any = {},
+    client: Socket,
+    id?: string,
+  ): Promise<void> {
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    console.log(
+      `[LLM Service Stream] ${requestId} Starting messages stream request:`,
+      {
+        provider: options.provider,
+        messagesCount: messages?.length || 0,
+        hasSystemMessage: messages?.some((m) => m.role === 'system') || false,
+        options: { ...options, provider: '[REDACTED]' },
+        clientId: client.id,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      console.error(
+        `[LLM Service Stream] ${requestId} Invalid messages array:`,
+        {
+          messages,
+          isArray: Array.isArray(messages),
+        },
+      );
+      throw new Error('Messages array is required and must not be empty');
+    }
+
+    await this.performStreaming(
+      requestId,
+      'messages',
+      messages,
+      options,
+      client,
+      id,
+    );
+  }
+
+  /**
+   * Perform streaming response generation with common logic extracted
+   * @param requestId - Request identifier
+   * @param inputType - 'prompt' or 'messages'
+   * @param inputData - Prompt string or messages array
+   * @param options - Options
+   * @param client - Socket client
+   * @param id - Optional ID
+   */
+  private async performStreaming(
+    requestId: string,
+    inputType: 'prompt' | 'messages',
+    inputData: string | any[],
+    options: any,
+    client: Socket,
+    id?: string,
+  ): Promise<string> {
+    const startTime = Date.now();
+    const provider = options.provider;
+
+    // Prepare messages
+    let messages: any[];
+    if (inputType === 'prompt') {
+      messages = [{ role: 'user', content: inputData as string }];
+    } else {
+      messages = inputData as any[];
+    }
+
+    // Provider validation
+    const providerConfig = this.getConfigByProvider(provider);
+    if (!providerConfig) {
+      throw new Error(`No provider found for provider: ${provider}`);
+    }
+
+    const model = options.model || this.defaultOptions.model;
+    if (!providerConfig.models.includes(model)) {
+      throw new Error(`Model ${model} not available for provider ${provider}`);
+    }
+
+    // Remove provider from options
+    const { provider: _, ...clientOptions } = options;
+    delete clientOptions['openaiReasoning'];
+
+    // Configure provider if needed
+    if (
+      !this.currentProvider ||
+      this.currentProvider.id !== providerConfig.id
+    ) {
+      console.log(
+        `[LLM Service Stream] ${requestId} Configuring provider: ${providerConfig.provider}`,
+      );
+      this.configureProvider(providerConfig);
+    }
+
+    if (!this.client) {
+      console.error(
+        `[LLM Service Stream] ${requestId} Client not configured after provider setup`,
+      );
+      throw new Error(
+        'LLM provider not configured. Please call configureProvider() first.',
+      );
+    }
+
+    // Prepare completion options
+    const baseOptions = {
+      ...this.defaultOptions,
+      ...clientOptions,
+    };
+
+    // Check if openaiReasoning option is enabled
+    const useResponsesAPI = options.openaiReasoning;
+
+    let streamOptions = baseOptions;
+    if (useResponsesAPI) {
+      // Convert messages to input and instructions for responses API
+      const systemMessage = messages.find((m: any) => m.role === 'system');
+      const userMessages = messages.filter((m: any) => m.role === 'user');
+      const instructions = systemMessage ? systemMessage.content : '';
+      const input = userMessages.map((m: any) => m.content).join('\n\n');
+
+      streamOptions = {
+        model,
+        input,
+        instructions,
+        reasoning: {
+          effort: options.reasoning_effort,
+          summary: "auto",
+        },
+        temperature: baseOptions.temperature,
+        max_tokens: baseOptions.max_tokens,
+        stream: true,
+      };
+    } else {
+      // For chat completions, use messages
+      streamOptions = {
+        ...baseOptions,
+        messages,
+        stream: true,
+        streamOptions: { includeUsage: true },
+      };
+    }
+
+    console.log(
+      `[LLM Service Stream] ${requestId} Sending ${inputType} stream to OpenAI:`,
+      {
+        model: useResponsesAPI ? streamOptions.model : baseOptions.model,
+        messagesCount: useResponsesAPI ? 1 : messages.length,
+        temperature: useResponsesAPI
+          ? streamOptions.temperature
+          : baseOptions.temperature,
+        maxTokens: useResponsesAPI
+          ? streamOptions.max_tokens
+          : baseOptions.max_tokens,
+        useResponsesAPI,
+      },
+    );
+
+    try {
+      let response = '';
+
+      switch (this.providerType) {
+        case 'openai': {
+          let stream;
+          if (useResponsesAPI) {
+            // Use responses.stream API
+            stream = await this.client.responses.stream(streamOptions);
+          } else {
+            // Use chat.completions.create with streamOptions
+            stream = await this.client.chat.completions.create(streamOptions);
+          }
+
+          for await (const chunk of stream) {
+            let contentToken = '';
+            let reasoningToken = '';
+
+            if (useResponsesAPI) {
+              // Handle responses API event types
+              if (chunk.type === 'response.reasoning_text.delta' || chunk.type === 'response.reasoning_summary_text.delta') {
+                reasoningToken = chunk.delta || '';
+              } else if (chunk.type === 'response.output_text.delta') {
+                contentToken = chunk.delta || '';
+              } else if (chunk.type === 'error') {
+                // Handle streaming error events
+                throw new Error(`Streaming error: ${chunk.message} (code: ${chunk.code})`);
+              }
+              // Skip other event types
+            } else {
+              // For chat completions API
+              contentToken = chunk.choices[0]?.delta?.content || '';
+              reasoningToken = chunk.choices[0]?.delta.reasoning || '';
+
+            }
+
+            // Emit chunk with both content and reasoning tokens
+            if (contentToken || reasoningToken) {
+              client.emit(
+                'chunk',
+                id
+                  ? {
+                    id,
+                    chunk: contentToken,
+                    reasoning: reasoningToken,
+                  }
+                  : {
+                    chunk: contentToken,
+                    reasoning: reasoningToken,
+                  },
+              );
+            }
+
+            // Accumulate response content (only content tokens, not reasoning)
+            if (contentToken) {
+              response += contentToken;
+            }
+          }
+
+          const duration = Date.now() - startTime;
+          console.log(
+            `[LLM Service Stream] ${requestId} ${inputType} stream completed:`,
+            {
+              responseLength: response.length,
+              duration: `${duration}ms`,
+              isEmpty: response.length === 0,
+              model: useResponsesAPI ? streamOptions.model : baseOptions.model,
+              clientId: client.id,
+              responsePreview:
+                response.substring(0, 200) +
+                (response.length > 200 ? '...' : ''),
+              timestamp: new Date().toISOString(),
+            },
+          );
+
+          client.emit('complete', id ? { id, response } : { response });
+
+          break;
+        }
+        default:
+          throw new Error(
+            `Provider ${this.providerType} not implemented for streaming`,
+          );
+      }
+
+      return response;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(
+        `[LLM Service Stream] ${requestId} ${inputType} stream API call failed after ${duration}ms:`,
+        {
+          error: error.message,
+          provider: this.currentProvider?.provider,
+          messagesCount: messages.length,
+          clientId: client.id,
+          stack: error.stack?.split('\n')[0],
+          timestamp: new Date().toISOString(),
+        },
+      );
+      throw new Error(`Failed to get LLM stream response: ${error.message}`);
+    }
   }
 
   private providerType: string = '';

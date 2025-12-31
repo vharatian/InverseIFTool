@@ -33,8 +33,8 @@ const Login = () => {
       const response = await api.post('/auth/login', { email, password })
       const data = response.data
 
-      if (data.access_token && data.user) {
-        login(data.access_token, data.user)
+      if (data.access_token && data.refresh_token && data.user) {
+        login(data.access_token, data.refresh_token, data.user)
         navigate('/')
       } else {
         throw new Error('Invalid response')

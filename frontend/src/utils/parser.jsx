@@ -23,6 +23,9 @@ export function parseEvaluation(text) {
     return match ? match[1].trim() : null
   }
 
+  // Log the raw text for debugging
+  console.log('Parsing evaluation response:', text.substring(0, 500) + (text.length > 500 ? '...' : ''))
+
   // Grading Basis (JSON)
   const gradingBasisRaw = extractSection('Grading Basis')
   if (gradingBasisRaw) {
@@ -53,17 +56,28 @@ export function parseEvaluation(text) {
   // Explanation
   result.explanation = extractSection('Explanation')
 
-  // If score not found, calculate from gradingBasis
-  if (result.score == null && result.gradingBasis) {
-    const criteriaCount = Object.keys(result.gradingBasis).length
-    const passCount = Object.values(result.gradingBasis).filter(
-      (status) => status === 'PASS',
-    ).length
-    result.score = passCount > criteriaCount / 2 ? 1 : 0
-    if (!result.explanation) {
-      result.explanation = `Calculated score: ${passCount}/${criteriaCount} criteria passed`
+  // If score not found, try from JSON answer_score, then calculate from gradingBasis
+  if (result.score == null) {
+    if (result.json && typeof result.json.answer_score === 'number') {
+      result.score = result.json.answer_score
+      if (!result.explanation) {
+        result.explanation = `Score from JSON: ${result.score}`
+      }
+    } else if (result.gradingBasis) {
+      const criteriaCount = Object.keys(result.gradingBasis).length
+      const passCount = Object.values(result.gradingBasis).filter(
+        (status) => status === 'PASS',
+      ).length
+      result.score = passCount > criteriaCount / 2 ? 1 : 0
+      if (!result.explanation) {
+        result.explanation = `Calculated score: ${passCount}/${criteriaCount} criteria passed`
+      }
     }
   }
 
+  // Score is only extracted from [Score] section or calculated from [Grading Basis]
+  // No fallback extraction from raw text to prevent false positives
+
+  console.log('Parsed evaluation result:', result)
   return result
 }

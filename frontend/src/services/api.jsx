@@ -24,10 +24,62 @@ api.interceptors.request.use(
   },
 )
 
-// Response interceptor for error handling
+// Response interceptor for error handling and token refresh
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config
+
+    // If token expired and we haven't already tried to refresh
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      console.log('Received 401 error, attempting token refresh...')
+      originalRequest._retry = true
+
+      try {
+        const refreshToken = localStorage.getItem('refresh_token')
+        console.log('Refresh token available:', !!refreshToken)
+
+        if (refreshToken) {
+          console.log('Attempting token refresh...')
+
+          // Use axios instance without interceptors to avoid recursion
+          const refreshResponse = await api.post('/auth/refresh', {
+            refresh_token: refreshToken
+          })
+
+          const { access_token, refresh_token: newRefreshToken } = refreshResponse.data
+          console.log('Token refresh successful, new tokens received')
+
+          // Update stored tokens
+          localStorage.setItem('auth_token', access_token)
+          localStorage.setItem('refresh_token', newRefreshToken)
+
+          // Update axios default headers
+          api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
+
+          // Notify AuthContext of token refresh
+          window.dispatchEvent(new CustomEvent('auth:tokenRefreshed', {
+            detail: { access_token, refresh_token: newRefreshToken }
+          }))
+
+          console.log('Token refresh completed, retrying original request')
+          // Retry original request with new token
+          originalRequest.headers['Authorization'] = `Bearer ${access_token}`
+          return api(originalRequest)
+        } else {
+          console.log('No refresh token available, redirecting to login')
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError.response?.data || refreshError.message)
+        // Token refresh failed, clear tokens and redirect to login
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('auth_user')
+        window.location.href = '/login'
+        return Promise.reject(refreshError)
+      }
+    }
+
     console.error('API Error:', error)
     return Promise.reject(error)
   },

@@ -41,8 +41,8 @@ const Register = () => {
       const response = await api.post('/auth/register', { name, email, password })
       const data = response.data
 
-      if (data.access_token && data.user) {
-        register(data.access_token, data.user)
+      if (data.access_token && data.refresh_token && data.user) {
+        register(data.access_token, data.refresh_token, data.user)
         navigate('/')
       } else {
         throw new Error('Invalid response')

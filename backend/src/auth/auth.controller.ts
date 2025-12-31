@@ -31,11 +31,12 @@ export class AuthController {
     try {
       const { email, name, password } = body;
       const user = await this.authService.register(email, name, password);
-      const { password: _, ...result } = user;
-      return {
-        message: 'User registered successfully',
-        user: result,
-      };
+      // Auto-login after successful registration
+      return this.authService.login({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      });
     } catch (error) {
       throw new HttpException('Registration failed', HttpStatus.BAD_REQUEST);
     }
@@ -57,5 +58,28 @@ export class AuthController {
   @Get('profile')
   getProfile(@Request() req) {
     return this.authService.getProfile(req.user.userId);
+  }
+
+  @Post('refresh')
+  async refresh(@Body() body: { refresh_token: string }) {
+    try {
+      return await this.authService.refreshAccessToken(body.refresh_token);
+    } catch (error) {
+      throw new HttpException('Invalid refresh token', HttpStatus.UNAUTHORIZED);
+    }
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('logout')
+  async logout(@Request() req) {
+    try {
+      await this.authService.revokeRefreshToken(req.user.userId);
+      return { message: 'Logged out successfully' };
+    } catch (error) {
+      throw new HttpException(
+        'Logout failed',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

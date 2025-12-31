@@ -18,6 +18,7 @@ const ActivityConsole = ({ configLoading, llmConfigs }) => {
   // Auto-expand when new messages arrive
   useEffect(() => {
     if (messages && messages.length > 0 && !isExpanded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsExpanded(true)
     }
   }, [messages, isExpanded])

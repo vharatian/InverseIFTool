@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { CButton, CCard, CCardBody, CCardHeader, CCol, CForm, CRow } from '@coreui/react'
 import useLLM from '../../../hooks/useLLM'
 import { useLog } from '../../../contexts/LogContext'
+import { generateNotebookTemplate } from '../../../utils/tools'
 import {
   LLMConfigSelector,
   PromptFormFields,
@@ -31,12 +32,13 @@ const JsonPromptForm = () => {
     configLoading,
     runContext,
     scoreState,
-    isSubmitting,
+    isRunning,
     generate,
     evaluate: evaluateResponse,
     score,
     run,
     batch,
+    reEvaluate,
     addManualResponse,
     cancelBatch,
     resetResults,
@@ -63,6 +65,50 @@ const JsonPromptForm = () => {
     setJudgeModel(model)
     const provider = findProviderForModel(model)
     if (provider) setJudgeProvider(provider)
+  }
+
+  const handleReEvaluate = (responseItem) => {
+    reEvaluate(responseItem, validatedJson, prompt, judgeModel, judgeProvider, judgeSystemPrompt)
+  }
+
+  const handleExport = () => {
+    const wordCount = prompt.split(/\s+/).filter((word) => word.length > 0).length
+    const promptLengthCategory =
+      wordCount < 20 ? '< 20 words' : wordCount <= 50 ? '20 - 50 words' : '> 50 words'
+
+    const data = {
+      taskId: `e${Date.now().toString(36)}${Math.random().toString(36).substr(2, 5)}`,
+      domain: 'Education & Research',
+      promptLength: promptLengthCategory,
+      userPrompt: prompt,
+      idealResponse: idealResponse || undefined,
+      criteria: validatedJson || [],
+      judgePromptTemplate:
+        '<Question>:{prompt}\n\n<Standard Answer>:{response_reference}\n\n<Student Answer>:{response}',
+      judgeSystemPrompt: judgeSystemPrompt,
+      responses: runContext.map((item) => ({
+        model: testModel || 'unknown_model',
+        content: item.modelContent,
+        judgeText: item.judgeText,
+        isManual: item.modelContent === idealResponse,
+      })),
+      attempts: runContext.length,
+    }
+
+    const notebookJson = generateNotebookTemplate(data)
+
+    // Create blob and download
+    const blob = new Blob([notebookJson], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `evaluation_${data.taskId}.ipynb`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
+    addMessage('Notebook exported successfully', 'success', 'export')
   }
 
   const handleSubmit = async (event) => {
@@ -161,6 +207,7 @@ const JsonPromptForm = () => {
         const activeConfig = llmConfigs.find((c) => c.isActive) || llmConfigs[0]
         if (activeConfig) {
           setTestModel(activeConfig.defaultModel)
+
           setTestProvider(activeConfig.provider)
           addMessage(`Set default test model: ${activeConfig.defaultModel}`, 'info', 'config')
         }
@@ -169,24 +216,26 @@ const JsonPromptForm = () => {
         const activeConfig = llmConfigs.find((c) => c.isActive) || llmConfigs[0]
         if (activeConfig) {
           setJudgeModel(activeConfig.defaultModel)
+
           setJudgeProvider(activeConfig.provider)
           addMessage(`Set default judge model: ${activeConfig.defaultModel}`, 'info', 'config')
         }
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [llmConfigs, configLoading])
 
   useEffect(() => {
     if (configLoading) {
       addMessage('Loading LLM configuration...', 'info', 'config')
     }
-  }, [configLoading, addMessage]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [configLoading, addMessage])
 
   return (
     <>
       <ActivityConsole configLoading={configLoading} llmConfigs={llmConfigs} />
 
-      <Scoreboard isSubmitting={isSubmitting} scoreState={scoreState} />
+      <Scoreboard isRunning={isRunning} scoreState={scoreState} />
 
       <CRow>
         <CCol xs={12}>
@@ -211,7 +260,7 @@ const JsonPromptForm = () => {
                   criteriaJson={criteriaJson}
                   judgeSystemPrompt={judgeSystemPrompt}
                   maxTry={maxTry}
-                  isSubmitting={isSubmitting}
+                  isRunning={isRunning}
                   onPromptChange={setPrompt}
                   onIdealResponseChange={setIdealResponse}
                   onCriteriaJsonChange={setCriteriaJson}
@@ -224,14 +273,14 @@ const JsonPromptForm = () => {
                   className="m-2"
                   color="primary"
                   type="submit"
-                  disabled={isSubmitting || configLoading}
+                  disabled={isRunning || configLoading}
                   name="action"
                   value="run"
                 >
-                  {isSubmitting ? 'Processing...' : 'Run'}
+                  {isRunning ? 'Processing...' : 'Run'}
                 </CButton>
 
-                {isSubmitting && (
+                {isRunning && (
                   <CButton className="m-2" color="danger" onClick={cancelBatch}>
                     Cancel
                   </CButton>
@@ -241,7 +290,7 @@ const JsonPromptForm = () => {
                   className="m-2"
                   color="secondary"
                   onClick={resetResults}
-                  disabled={isSubmitting}
+                  disabled={isRunning}
                 >
                   Reset Results
                 </CButton>
@@ -250,11 +299,20 @@ const JsonPromptForm = () => {
                   className="m-2"
                   color="primary"
                   type="submit"
-                  disabled={isSubmitting || configLoading}
+                  disabled={isRunning || configLoading}
                   name="action"
                   value="test"
                 >
-                  {isSubmitting ? 'Processing...' : 'Test Ideal'}
+                  {isRunning ? 'Processing...' : 'Test Ideal'}
+                </CButton>
+
+                <CButton
+                  className="m-2"
+                  color="success"
+                  onClick={handleExport}
+                  disabled={isRunning || runContext.length === 0}
+                >
+                  Export .ipynb
                 </CButton>
               </CForm>
             </CCardBody>
@@ -262,7 +320,11 @@ const JsonPromptForm = () => {
         </CCol>
       </CRow>
 
-      <ResultsAccordion key={runContext.length} runContext={runContext} />
+      <ResultsAccordion
+        key={runContext.length}
+        runContext={runContext}
+        onReEvaluate={handleReEvaluate}
+      />
     </>
   )
 }

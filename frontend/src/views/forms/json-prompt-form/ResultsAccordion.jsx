@@ -20,9 +20,10 @@ import PropTypes from 'prop-types'
 /**
  * Component for displaying model responses and evaluations in an accordion
  * @param {Object} props - Component props
- * @param {Array<{id: string, runId: string, status?: 'generating' | 'evaluating' | 'parsing' | 'scoring' | 'completed' | 'error', modelContent?: string, judgeText?: string, gradingBasis?: Object, score?: number, json?: any, explanation?: string}>} props.runContext - Array of flattened run context objects containing all response data
+  * @param {Array<{id: string, runId: string, status?: 'generating' | 'evaluating' | 'parsing' | 'scoring' | 'completed' | 'error', modelContent?: string, modelReasoning?: string, judgeText?: string, judgeReasoning?: string, gradingBasis?: Object, score?: number, json?: any, explanation?: string, error?: string}>} props.runContext - Array of flattened run context objects containing all response data
+ * @param {Function} props.onReEvaluate - Function to re-evaluate a response
  */
-const ResultsAccordion = ({ runContext }) => {
+const ResultsAccordion = ({ runContext, onReEvaluate }) => {
   const [copiedItems, setCopiedItems] = useState(new Set())
 
   // Filter to only show contexts that have model responses
@@ -111,9 +112,8 @@ const ResultsAccordion = ({ runContext }) => {
                       color={context.gradingBasis[key] !== 'FAIL' ? 'success' : 'danger'}
                     >
                       {key}
-                    </CBadge>)
-                  )
-                }
+                    </CBadge>
+                  ))}
                 {context.score != undefined && (
                   <CBadge
                     style={{ marginRight: '10px' }}
@@ -127,32 +127,76 @@ const ResultsAccordion = ({ runContext }) => {
                 <CTabs defaultActiveItemKey="response">
                   <CTabList variant="tabs">
                     <CTab itemKey="response">Response</CTab>
+                    <CTab itemKey="model-reasoning" disabled={!context.modelReasoning}>
+                      Reasoning
+                    </CTab>
                     <CTab itemKey="evaluation" disabled={!context.judgeText}>
                       Evaluation
                     </CTab>
-                  </CTabList>
+                     <CTab itemKey="judge-reasoning" disabled={!context.judgeReasoning}>
+                       Judge Reasoning
+                     </CTab>
+                     <CTab itemKey="error" disabled={!context.error}>
+                       Error
+                     </CTab>
+                   </CTabList>
                   <CTabContent>
                     <CTabPanel className="p-3" itemKey="response">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div className="flex-grow-1 me-2">
                           <small className="text-muted">Model Response</small>
                         </div>
-                        <CButton
-                          size="sm"
-                          color={
-                            copiedItems.has(`${context.id}-response`) ? 'success' : 'secondary'
-                          }
-                          onClick={() =>
-                            copyToClipboard(context.modelContent, context.id, 'response')
-                          }
-                          title="Copy response to clipboard"
-                        >
-                          <CIcon icon={cilCopy} size="sm" className="me-1" />
-                          {copiedItems.has(`${context.id}-response`) ? 'Copied!' : 'Copy'}
-                        </CButton>
+                        <div className="d-flex gap-2">
+                          <CButton
+                            size="sm"
+                            color="warning"
+                            onClick={() => onReEvaluate(context)}
+                            disabled={context.status === 'evaluating' || !context.modelContent}
+                            title="Re-evaluate this response"
+                          >
+                            Re-evaluate
+                          </CButton>
+                          <CButton
+                            size="sm"
+                            color={
+                              copiedItems.has(`${context.id}-response`) ? 'success' : 'secondary'
+                            }
+                            onClick={() =>
+                              copyToClipboard(context.modelContent, context.id, 'response')
+                            }
+                            title="Copy response to clipboard"
+                          >
+                            <CIcon icon={cilCopy} size="sm" className="me-1" />
+                            {copiedItems.has(`${context.id}-response`) ? 'Copied!' : 'Copied!'}
+                          </CButton>
+                        </div>
                       </div>
                       <div style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
                         {context.modelContent}
+                      </div>
+                    </CTabPanel>
+                    <CTabPanel className="p-3" itemKey="model-reasoning">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div className="flex-grow-1 me-2">
+                          <small className="text-muted">Model Reasoning Process</small>
+                        </div>
+                        <CButton
+                          size="sm"
+                          color={
+                            copiedItems.has(`${context.id}-model-reasoning`) ? 'success' : 'secondary'
+                          }
+                          onClick={() =>
+                            copyToClipboard(context.modelReasoning || '', context.id, 'model-reasoning')
+                          }
+                          disabled={!context.modelReasoning}
+                          title="Copy reasoning to clipboard"
+                        >
+                          <CIcon icon={cilCopy} size="sm" className="me-1" />
+                          {copiedItems.has(`${context.id}-model-reasoning`) ? 'Copied!' : 'Copy'}
+                        </CButton>
+                      </div>
+                      <div style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word', fontFamily: 'monospace', fontSize: '0.9em' }}>
+                        {context.modelReasoning || 'No reasoning data available'}
                       </div>
                     </CTabPanel>
                     <CTabPanel className="p-3" itemKey="evaluation">
@@ -179,7 +223,55 @@ const ResultsAccordion = ({ runContext }) => {
                         {context.judgeText || 'No evaluation available'}
                       </div>
                     </CTabPanel>
-                  </CTabContent>
+                    <CTabPanel className="p-3" itemKey="judge-reasoning">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div className="flex-grow-1 me-2">
+                          <small className="text-muted">Judge Reasoning Process</small>
+                        </div>
+                        <CButton
+                          size="sm"
+                          color={
+                            copiedItems.has(`${context.id}-judge-reasoning`) ? 'success' : 'secondary'
+                          }
+                          onClick={() =>
+                            copyToClipboard(context.judgeReasoning || '', context.id, 'judge-reasoning')
+                          }
+                          disabled={!context.judgeReasoning}
+                          title="Copy reasoning to clipboard"
+                        >
+                          <CIcon icon={cilCopy} size="sm" className="me-1" />
+                          {copiedItems.has(`${context.id}-judge-reasoning`) ? 'Copied!' : 'Copy'}
+                        </CButton>
+                      </div>
+                       <div style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word', fontFamily: 'monospace', fontSize: '0.9em' }}>
+                         {context.judgeReasoning || 'No reasoning data available'}
+                       </div>
+                     </CTabPanel>
+                     <CTabPanel className="p-3" itemKey="error">
+                       <div className="d-flex justify-content-between align-items-start mb-2">
+                         <div className="flex-grow-1 me-2">
+                           <small className="text-muted">Error Details</small>
+                         </div>
+                         <CButton
+                           size="sm"
+                           color={
+                             copiedItems.has(`${context.id}-error`) ? 'success' : 'secondary'
+                           }
+                           onClick={() =>
+                             copyToClipboard(context.error || '', context.id, 'error')
+                           }
+                           disabled={!context.error}
+                           title="Copy error to clipboard"
+                         >
+                           <CIcon icon={cilCopy} size="sm" className="me-1" />
+                           {copiedItems.has(`${context.id}-error`) ? 'Copied!' : 'Copy'}
+                         </CButton>
+                       </div>
+                       <div style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word', color: 'red' }}>
+                         {context.error || 'No error details available'}
+                       </div>
+                     </CTabPanel>
+                   </CTabContent>
                 </CTabs>
               </CAccordionBody>
             </CAccordionItem>
@@ -204,13 +296,17 @@ ResultsAccordion.propTypes = {
         'error',
       ]),
       modelContent: PropTypes.string,
+      modelReasoning: PropTypes.string,
       judgeText: PropTypes.string,
+      judgeReasoning: PropTypes.string,
       gradingBasis: PropTypes.object,
       score: PropTypes.number,
-      json: PropTypes.any,
-      explanation: PropTypes.string,
-    }),
+       json: PropTypes.any,
+       explanation: PropTypes.string,
+       error: PropTypes.string,
+     }),
   ).isRequired,
+  onReEvaluate: PropTypes.func.isRequired,
 }
 
 export default ResultsAccordion

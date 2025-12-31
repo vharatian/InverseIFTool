@@ -5,7 +5,7 @@ import PropTypes from 'prop-types'
 /**
  * Component for displaying batch run statistics and scoreboard
  * @param {Object} props - Component props
- * @param {boolean} props.isSubmitting - Whether a batch is currently running
+  * @param {boolean} props.isRunning - Whether a batch is currently running
  * @param {Object} props.scoreState - Score state with batch statistics
  * @param {number} props.scoreState.attempts - Total number of attempts
  * @param {number} props.scoreState.wins - Number of successful runs
@@ -13,7 +13,7 @@ import PropTypes from 'prop-types'
  * @param {number} props.scoreState.failures - Number of evaluation failures
  * @param {Object} props.scoreState.criteriaStats - Statistics for each evaluation criteria
  */
-const Scoreboard = ({ isSubmitting, scoreState }) => {
+const Scoreboard = ({ isRunning, scoreState }) => {
   const winRate =
     scoreState.attempts > 0 ? Math.round((scoreState.wins / scoreState.attempts) * 100) : 0
   const lossRate = scoreState.attempts > 0 ? 100 - winRate : 0
@@ -24,7 +24,7 @@ const Scoreboard = ({ isSubmitting, scoreState }) => {
   const diverseCriteria = criteriaNames.filter(
     (name) => scoreState.criteriaStats[name].pass > 0 && scoreState.criteriaStats[name].fail > 0,
   ).length
-  const requiredDiversity = Math.ceil(totalCriteria / 2)
+  const requiredDiversity = 1
   const batchWin = diverseCriteria >= requiredDiversity
 
   return (
@@ -104,7 +104,7 @@ const Scoreboard = ({ isSubmitting, scoreState }) => {
               </>
             )}
 
-            {isSubmitting && (
+            {isRunning && (
               <CRow className="mt-3">
                 <CCol xs={12}>
                   <div className="text-muted">
@@ -121,7 +121,7 @@ const Scoreboard = ({ isSubmitting, scoreState }) => {
 }
 
 Scoreboard.propTypes = {
-  isSubmitting: PropTypes.bool,
+  isRunning: PropTypes.bool,
   scoreState: PropTypes.shape({
     attempts: PropTypes.number,
     wins: PropTypes.number,

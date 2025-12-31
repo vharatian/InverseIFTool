@@ -3,7 +3,9 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { User } from '../users/user.entity';
+import { RefreshToken } from './refresh-token.entity';
 
 export interface AuthUser {
   id: string;
@@ -16,6 +18,8 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(RefreshToken)
+    private refreshTokenRepository: Repository<RefreshToken>,
     private jwtService: JwtService,
   ) {}
 
@@ -34,8 +38,12 @@ export class AuthService {
 
   async login(user: AuthUser) {
     const payload = { email: user.email, sub: user.id, name: user.name };
+    const accessToken = this.jwtService.sign(payload);
+    const refreshToken = await this.generateRefreshToken(user.id);
+
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: accessToken,
+      refresh_token: refreshToken,
       user,
     };
   }
@@ -92,5 +100,64 @@ export class AuthService {
     }
     const { password, ...result } = user;
     return result as User;
+  }
+
+  /**
+   * Generate a new refresh token for a user
+   */
+  private async generateRefreshToken(userId: string): Promise<string> {
+    // Revoke existing refresh tokens for this user
+    await this.refreshTokenRepository.update(
+      { userId, isRevoked: false },
+      { isRevoked: true },
+    );
+
+    // Generate new refresh token
+    const token = crypto.randomBytes(64).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30); // 30 days
+
+    const refreshToken = this.refreshTokenRepository.create({
+      token,
+      userId,
+      expiresAt,
+    });
+
+    await this.refreshTokenRepository.save(refreshToken);
+    return token;
+  }
+
+  /**
+   * Validate and refresh access token using refresh token
+   */
+  async refreshAccessToken(refreshToken: string) {
+    const tokenEntity = await this.refreshTokenRepository.findOne({
+      where: { token: refreshToken, isRevoked: false },
+      relations: ['user'],
+    });
+
+    if (!tokenEntity || tokenEntity.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const user = tokenEntity.user;
+    const payload = { email: user.email, sub: user.id, name: user.name };
+    const newAccessToken = this.jwtService.sign(payload);
+    const newRefreshToken = await this.generateRefreshToken(user.id);
+
+    return {
+      access_token: newAccessToken,
+      refresh_token: newRefreshToken,
+    };
+  }
+
+  /**
+   * Revoke refresh token (for logout)
+   */
+  async revokeRefreshToken(userId: string): Promise<void> {
+    await this.refreshTokenRepository.update(
+      { userId, isRevoked: false },
+      { isRevoked: true },
+    );
   }
 }
