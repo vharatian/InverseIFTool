@@ -109,40 +109,6 @@ const JsonPromptForm = () => {
     setShowExportModal(true)
   }
 
-  const handleGoogleDriveDownload = async () => {
-    if (!googleDriveUrl.trim()) {
-      addMessage('❌ Please enter a Google Drive URL or file ID', 'error', 'google-drive')
-      return
-    }
-
-    try {
-      addMessage(`📥 Downloading file from Google Drive: ${googleDriveUrl}`, 'info', 'google-drive')
-
-      const response = await googleDriveApi.downloadFile(googleDriveUrl.trim())
-
-      // Convert blob to text for console logging
-      const textContent = await response.data.text()
-
-      console.log('Google Drive File Content:', textContent)
-
-      addMessage(
-        '✅ File downloaded successfully. Content logged to console.',
-        'success',
-        'google-drive',
-      )
-
-      // Close modal and reset URL
-      setShowGoogleDriveModal(false)
-      setGoogleDriveUrl('')
-    } catch (error) {
-      console.error('Google Drive download error:', error)
-      addMessage(
-        `❌ Failed to download file: ${error.response?.data?.message || error.message}`,
-        'error',
-        'google-drive',
-      )
-    }
-  }
 
   const handleImportData = (importedData, notebookJson, source, sourceData) => {
     try {
@@ -426,9 +392,6 @@ const JsonPromptForm = () => {
         <CModalFooter>
           <CButton color="secondary" onClick={() => setShowGoogleDriveModal(false)}>
             Cancel
-          </CButton>
-          <CButton color="primary" onClick={handleGoogleDriveDownload}>
-            Download
           </CButton>
         </CModalFooter>
       </CModal>
