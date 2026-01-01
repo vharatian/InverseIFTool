@@ -8,7 +8,6 @@ const JsonArrayTextarea = ({
   rows = 10,
   value = '',
   onChange,
-  onValidJson,
   className,
   ...props
 }) => {
@@ -16,40 +15,33 @@ const JsonArrayTextarea = ({
   const [errorMessage, setErrorMessage] = useState('')
   const [jsonArray, setJsonArray] = useState(null)
 
-  const validateJsonArray = useCallback(
-    (jsonString) => {
-      if (!jsonString.trim()) {
-        setIsValid(true)
-        setErrorMessage('')
+  const validateJsonArray = (jsonString) => {
+    if (!jsonString.trim()) {
+      setIsValid(true)
+      setErrorMessage('')
+      setJsonArray(null)
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(jsonString)
+
+      if (!Array.isArray(parsed)) {
+        setIsValid(false)
+        setErrorMessage('Input must be a JSON array')
         setJsonArray(null)
-        onValidJson?.(null)
         return
       }
 
-      try {
-        const parsed = JSON.parse(jsonString)
-
-        if (!Array.isArray(parsed)) {
-          setIsValid(false)
-          setErrorMessage('Input must be a JSON array')
-          setJsonArray(null)
-          onValidJson?.(null)
-          return
-        }
-
-        setIsValid(true)
-        setErrorMessage('')
-        setJsonArray(parsed)
-        onValidJson?.(parsed)
-      } catch (error) {
-        setIsValid(false)
-        setErrorMessage(`Invalid JSON: ${error.message}`)
-        setJsonArray(null)
-        onValidJson?.(null)
-      }
-    },
-    [onValidJson],
-  )
+      setIsValid(true)
+      setErrorMessage('')
+      setJsonArray(parsed)
+    } catch (error) {
+      setIsValid(false)
+      setErrorMessage(`Invalid JSON: ${error.message}`)
+      setJsonArray(null)
+    }
+  }
 
   const handleChange = (e) => {
     const newValue = e.target.value

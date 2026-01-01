@@ -44,7 +44,7 @@ api.interceptors.response.use(
 
           // Use axios instance without interceptors to avoid recursion
           const refreshResponse = await api.post('/auth/refresh', {
-            refresh_token: refreshToken
+            refresh_token: refreshToken,
           })
 
           const { access_token, refresh_token: newRefreshToken } = refreshResponse.data
@@ -58,9 +58,11 @@ api.interceptors.response.use(
           api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
 
           // Notify AuthContext of token refresh
-          window.dispatchEvent(new CustomEvent('auth:tokenRefreshed', {
-            detail: { access_token, refresh_token: newRefreshToken }
-          }))
+          window.dispatchEvent(
+            new CustomEvent('auth:tokenRefreshed', {
+              detail: { access_token, refresh_token: newRefreshToken },
+            }),
+          )
 
           console.log('Token refresh completed, retrying original request')
           // Retry original request with new token
@@ -233,6 +235,44 @@ export const llmApi = {
    */
   generateResponseWithMessages: (messages, options) =>
     api.post('/llm/generate-with-messages', { messages, options }),
+}
+
+/**
+ * Google Drive API endpoints
+ * @namespace googleDriveApi
+ */
+export const googleDriveApi = {
+  /**
+   * Download a file from Google Drive
+   * @param {string} file - File ID or Google Drive URL
+   * @returns {Promise<AxiosResponse<Blob>>} File content as blob
+   */
+  downloadFile: (file) =>
+    api.get('/google-drive/download', {
+      params: { file },
+      responseType: 'blob',
+    }),
+
+  /**
+   * Update a file on Google Drive
+   * @param {string} file - File ID or Google Drive URL
+   * @param {Blob|Buffer} content - File content
+   * @param {string} [mimeType] - MIME type of the content
+   * @returns {Promise<AxiosResponse<{message: string}>>} Update confirmation
+   */
+  updateFile: (file, content, mimeType) => {
+    const formData = new FormData()
+    console.log("content is", content)
+    formData.append('content', content)
+    formData.append('value', "hello")
+
+    return api.put('/google-drive/update', formData, {
+      params: { file, mimeType },
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
 }
 
 export default api

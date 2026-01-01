@@ -5,9 +5,8 @@ import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { ConfigModule } from './config/config.module';
 import { AuthModule } from './auth/auth.module';
-import { SeedService } from './seeders/seed.service';
-import { User } from './users/user.entity';
 import { LlmModule } from './llm/llm.module';
+import { GoogleDriveModule } from './google-drive/google-drive.module';
 
 @Module({
   imports: [
@@ -18,13 +17,13 @@ import { LlmModule } from './llm/llm.module';
       synchronize: process.env.NODE_ENV !== 'production',
       logging: process.env.NODE_ENV === 'development',
     }),
-    TypeOrmModule.forFeature([User]),
     UsersModule,
     ConfigModule,
     AuthModule,
     LlmModule,
+    GoogleDriveModule,
   ],
   controllers: [AppController],
-  providers: [AppService, SeedService],
+  providers: [AppService],
 })
 export class AppModule {}

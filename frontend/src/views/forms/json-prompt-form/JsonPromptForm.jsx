@@ -1,8 +1,25 @@
 import React, { useEffect, useState } from 'react'
-import { CButton, CCard, CCardBody, CCardHeader, CCol, CForm, CRow } from '@coreui/react'
+import {
+  CButton,
+  CCard,
+  CCardBody,
+  CCardHeader,
+  CCol,
+  CForm,
+  CRow,
+  CModal,
+  CModalHeader,
+  CModalBody,
+  CModalFooter,
+  CFormInput,
+  CFormLabel,
+} from '@coreui/react'
 import useLLM from '../../../hooks/useLLM'
 import { useLog } from '../../../contexts/LogContext'
-import { generateNotebookTemplate } from '../../../utils/tools'
+import { generateNotebookTemplate } from '../../../utils/notebook'
+import { googleDriveApi } from '../../../services/api'
+import ImportModal from '../../../components/ImportModal'
+import ExportModal from '../../../components/ExportModal'
 import {
   LLMConfigSelector,
   PromptFormFields,
@@ -12,16 +29,27 @@ import {
 } from './index'
 
 const JsonPromptForm = () => {
-  const [criteriaJson, setCriteriaJson] = useState('')
+  const [criteriaJson, setCriteriaJson] = useState(null)
+  const [criteriaText, setCriteriaText] = useState('')
   const [idealResponse, setIdealResponse] = useState('')
   const [prompt, setPrompt] = useState('')
   const [judgeSystemPrompt, setJudgeSystemPrompt] = useState('')
-  const [validatedJson, setValidatedJson] = useState(null)
   const [maxTry, setMaxTry] = useState(5)
   const [judgeProvider, setJudgeProvider] = useState('')
   const [judgeModel, setJudgeModel] = useState('')
   const [testProvider, setTestProvider] = useState('')
   const [testModel, setTestModel] = useState('')
+  const [importedNotebook, setImportedNotebook] = useState(null)
+
+  // Google Drive modal state
+  const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false)
+  const [googleDriveUrl, setGoogleDriveUrl] = useState('')
+
+  // Import modal state
+  const [showImportModal, setShowImportModal] = useState(false)
+
+  // Export modal state
+  const [showExportModal, setShowExportModal] = useState(false)
 
   // Use the centralized log context
   const { addMessage } = useLog()
@@ -50,10 +78,16 @@ const JsonPromptForm = () => {
     return llmConfigs.find((config) => config.models.includes(model))?.provider || null
   }
 
-  // Event handlers
-  const handleJsonValid = (parsedArray) => {
-    setValidatedJson(parsedArray)
+  const handleCriteriaChange = (c) => {
+    setCriteriaText(c)
+    try {
+      const json = JSON.parse(c)
+      setCriteriaJson(json)
+    } catch (e) {
+      console.log("not a valid json")
+    }
   }
+
 
   const handleTestModelChange = (model) => {
     setTestModel(model)
@@ -68,47 +102,70 @@ const JsonPromptForm = () => {
   }
 
   const handleReEvaluate = (responseItem) => {
-    reEvaluate(responseItem, validatedJson, prompt, judgeModel, judgeProvider, judgeSystemPrompt)
+    reEvaluate(responseItem, criteriaJson, prompt, judgeModel, judgeProvider, judgeSystemPrompt)
   }
 
   const handleExport = () => {
-    const wordCount = prompt.split(/\s+/).filter((word) => word.length > 0).length
-    const promptLengthCategory =
-      wordCount < 20 ? '< 20 words' : wordCount <= 50 ? '20 - 50 words' : '> 50 words'
+    setShowExportModal(true)
+  }
 
-    const data = {
-      taskId: `e${Date.now().toString(36)}${Math.random().toString(36).substr(2, 5)}`,
-      domain: 'Education & Research',
-      promptLength: promptLengthCategory,
-      userPrompt: prompt,
-      idealResponse: idealResponse || undefined,
-      criteria: validatedJson || [],
-      judgePromptTemplate:
-        '<Question>:{prompt}\n\n<Standard Answer>:{response_reference}\n\n<Student Answer>:{response}',
-      judgeSystemPrompt: judgeSystemPrompt,
-      responses: runContext.map((item) => ({
-        model: testModel || 'unknown_model',
-        content: item.modelContent,
-        judgeText: item.judgeText,
-        isManual: item.modelContent === idealResponse,
-      })),
-      attempts: runContext.length,
+  const handleGoogleDriveDownload = async () => {
+    if (!googleDriveUrl.trim()) {
+      addMessage('❌ Please enter a Google Drive URL or file ID', 'error', 'google-drive')
+      return
     }
 
-    const notebookJson = generateNotebookTemplate(data)
+    try {
+      addMessage(`📥 Downloading file from Google Drive: ${googleDriveUrl}`, 'info', 'google-drive')
 
-    // Create blob and download
-    const blob = new Blob([notebookJson], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `evaluation_${data.taskId}.ipynb`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+      const response = await googleDriveApi.downloadFile(googleDriveUrl.trim())
 
-    addMessage('Notebook exported successfully', 'success', 'export')
+      // Convert blob to text for console logging
+      const textContent = await response.data.text()
+
+      console.log('Google Drive File Content:', textContent)
+
+      addMessage(
+        '✅ File downloaded successfully. Content logged to console.',
+        'success',
+        'google-drive',
+      )
+
+      // Close modal and reset URL
+      setShowGoogleDriveModal(false)
+      setGoogleDriveUrl('')
+    } catch (error) {
+      console.error('Google Drive download error:', error)
+      addMessage(
+        `❌ Failed to download file: ${error.response?.data?.message || error.message}`,
+        'error',
+        'google-drive',
+      )
+    }
+  }
+
+  const handleImportData = (importedData, notebookJson, source, sourceData) => {
+    try {
+      // Update form fields with imported data
+      setImportedNotebook({ notebook: notebookJson, source, sourceData })
+      if (importedData.userPrompt) {
+        setPrompt(importedData.userPrompt)
+      }
+      if (importedData.idealResponse) {
+        setIdealResponse(importedData.idealResponse)
+      }
+      if (importedData.criteria) {
+        setCriteriaText(JSON.stringify(importedData.criteria, null, 2))
+        setCriteriaJson(importedData.criteria)
+      }
+      if (importedData.judgeSystemPrompt) {
+        setJudgeSystemPrompt(importedData.judgeSystemPrompt)
+      }
+
+      addMessage('✅ Notebook data imported successfully', 'success', 'import')
+    } catch (error) {
+      addMessage(`❌ Failed to import notebook data: ${error.message}`, 'error', 'import')
+    }
   }
 
   const handleSubmit = async (event) => {
@@ -133,7 +190,7 @@ const JsonPromptForm = () => {
           addMessage('❌ Please select a judge model and provider', 'error', 'system')
           return
         }
-        if (!validatedJson || validatedJson.length === 0) {
+        if (!criteriaJson) {
           console.error('Missing or invalid criteria')
           alert('Please provide valid evaluation criteria')
           addMessage('❌ Please provide valid evaluation criteria', 'error', 'system')
@@ -147,7 +204,7 @@ const JsonPromptForm = () => {
 
         await batch(
           prompt,
-          validatedJson,
+          criteriaJson,
           maxTry,
           4,
           testProvider,
@@ -174,7 +231,7 @@ const JsonPromptForm = () => {
         await addManualResponse(
           prompt,
           idealResponse,
-          validatedJson,
+          criteriaJson,
           judgeProvider,
           judgeModel,
           judgeSystemPrompt,
@@ -192,7 +249,7 @@ const JsonPromptForm = () => {
     }
   }
 
-  useEffect(() => {}, [runContext])
+  useEffect(() => { }, [runContext])
 
   useEffect(() => {
     if (llmConfigs && llmConfigs.length > 0 && !configLoading) {
@@ -257,16 +314,15 @@ const JsonPromptForm = () => {
                 <PromptFormFields
                   prompt={prompt}
                   idealResponse={idealResponse}
-                  criteriaJson={criteriaJson}
+                  criteriaJson={criteriaText}
                   judgeSystemPrompt={judgeSystemPrompt}
                   maxTry={maxTry}
                   isRunning={isRunning}
                   onPromptChange={setPrompt}
                   onIdealResponseChange={setIdealResponse}
-                  onCriteriaJsonChange={setCriteriaJson}
+                  onCriteriaJsonChange={handleCriteriaChange}
                   onJudgeSystemPromptChange={setJudgeSystemPrompt}
                   onMaxTryChange={setMaxTry}
-                  onJsonValid={handleJsonValid}
                 />
 
                 <CButton
@@ -314,6 +370,24 @@ const JsonPromptForm = () => {
                 >
                   Export .ipynb
                 </CButton>
+
+                <CButton
+                  className="m-2"
+                  color="secondary"
+                  onClick={() => setShowImportModal(true)}
+                  disabled={isRunning}
+                >
+                  Import from .ipynb
+                </CButton>
+
+                <CButton
+                  className="m-2"
+                  color="info"
+                  onClick={() => setShowGoogleDriveModal(true)}
+                  disabled={isRunning}
+                >
+                  Download from Drive/Colab
+                </CButton>
               </CForm>
             </CCardBody>
           </CCard>
@@ -324,6 +398,63 @@ const JsonPromptForm = () => {
         key={runContext.length}
         runContext={runContext}
         onReEvaluate={handleReEvaluate}
+      />
+
+      <CModal
+        visible={showGoogleDriveModal}
+        onClose={() => setShowGoogleDriveModal(false)}
+        alignment="center"
+      >
+        <CModalHeader>
+          <strong>Download from Google Drive or Colab</strong>
+        </CModalHeader>
+        <CModalBody>
+          <CForm>
+            <div className="mb-3">
+              <CFormLabel htmlFor="googleDriveUrl">Google Drive URL or File ID</CFormLabel>
+              <CFormInput
+                type="text"
+                id="googleDriveUrl"
+                placeholder="https://drive.google.com/file/d/... or https://colab.research.google.com/drive/... or file ID"
+                value={googleDriveUrl}
+                onChange={(e) => setGoogleDriveUrl(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </CForm>
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" onClick={() => setShowGoogleDriveModal(false)}>
+            Cancel
+          </CButton>
+          <CButton color="primary" onClick={handleGoogleDriveDownload}>
+            Download
+          </CButton>
+        </CModalFooter>
+      </CModal>
+
+      <ImportModal
+        visible={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportData={handleImportData}
+      />
+
+      <ExportModal
+        visible={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        importedNotebook={importedNotebook}
+        formData={{
+          userPrompt: prompt,
+          idealResponse: idealResponse || undefined,
+          criteria: criteriaJson || [],
+          judgeSystemPrompt: judgeSystemPrompt,
+          responses: runContext.map((item) => ({
+            model: testModel || 'unknown_model',
+            content: item.modelContent,
+            judgeText: item.judgeText,
+            isManual: item.modelContent === idealResponse,
+          })),
+        }}
       />
     </>
   )

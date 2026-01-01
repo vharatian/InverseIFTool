@@ -40,9 +40,9 @@ const CONCURRENT_RUN_LIMIT = 5
  * @returns {{
  *   llmConfigs: Array,
  *   configLoading: boolean,
-  *   runContext: Array<{id: string, runId: string, status?: 'generating' | 'evaluating' | 'parsing' | 'scoring' | 'completed' | 'error', modelContent?: string, judgeText?: string, gradingBasis?: Object, score?: number, json?: any, explanation?: string, error?: string}>,
+ *   runContext: Array<{id: string, runId: string, status?: 'generating' | 'evaluating' | 'parsing' | 'scoring' | 'completed' | 'error', modelContent?: string, judgeText?: string, gradingBasis?: Object, score?: number, json?: any, explanation?: string, error?: string}>,
  *   scoreState: {attempts: number, wins: number, losses: number, failures: number, criteriaStats: Object},
-  *   isRunning: boolean,
+ *   isRunning: boolean,
  *   setRunContext: Function,
  *   generate: Function,
  *   evaluate: Function,
@@ -67,10 +67,11 @@ const useLLM = (addMessage) => {
   const [runContext, setRunContext] = useState([])
   /** @type {boolean} Whether a submission is currently in progress */
   const isRunning = useMemo(
-    () => runContext.some((item) =>
-      ['generating', 'evaluating', 'parsing', 'scoring'].includes(item.status)
-    ),
-    [runContext]
+    () =>
+      runContext.some((item) =>
+        ['generating', 'evaluating', 'parsing', 'scoring'].includes(item.status),
+      ),
+    [runContext],
   )
   /** @type {AbortController|null} Controller for cancelling ongoing operations */
   const [abortController, setAbortController] = useState(null)
@@ -108,16 +109,16 @@ const useLLM = (addMessage) => {
   }, [])
 
   /**
-    * Add a manual response and evaluate it against criteria
-    * @param {string} prompt - The original prompt
-    * @param {string} response - The manual response to evaluate
-    * @param {Array} validatedJson - Validation criteria array
-    * @param {string} judgeProvider - Provider to use for evaluation
-    * @param {string} judgeModel - Model to use for evaluation
-    * @param {string} judgeSystemPrompt - System prompt for judge
-    * @param {string} runId - Run identifier
-    * @returns {Promise<boolean|null>} Evaluation result
-    */
+   * Add a manual response and evaluate it against criteria
+   * @param {string} prompt - The original prompt
+   * @param {string} response - The manual response to evaluate
+   * @param {Array} validatedJson - Validation criteria array
+   * @param {string} judgeProvider - Provider to use for evaluation
+   * @param {string} judgeModel - Model to use for evaluation
+   * @param {string} judgeSystemPrompt - System prompt for judge
+   * @param {string} runId - Run identifier
+   * @returns {Promise<boolean|null>} Evaluation result
+   */
   const addManualResponse = async (
     prompt,
     response,
@@ -148,7 +149,8 @@ const useLLM = (addMessage) => {
       )
 
       // Check if evaluation was valid and set status to completed
-      const isValidEvaluation = evaluation &&
+      const isValidEvaluation =
+        evaluation &&
         (evaluation.gradingBasis || evaluation.score != null || evaluation.explanation)
 
       if (isValidEvaluation) {
@@ -165,7 +167,9 @@ const useLLM = (addMessage) => {
       addMessage(`Manual response evaluation failed: ${error.message}`, 'error', 'manual')
       setRunContext((prev) =>
         prev.map((item) =>
-          item.id === responseId ? { ...item, status: 'error', judgeText: error.message, error: error.message } : item,
+          item.id === responseId
+            ? { ...item, status: 'error', judgeText: error.message, error: error.message }
+            : item,
         ),
       )
       throw error
@@ -218,12 +222,15 @@ const useLLM = (addMessage) => {
       )
 
       // Check if evaluation was valid and set status to completed
-      const isValidEvaluation = evaluation &&
+      const isValidEvaluation =
+        evaluation &&
         (evaluation.gradingBasis || evaluation.score != null || evaluation.explanation)
 
       if (isValidEvaluation) {
         setRunContext((prev) =>
-          prev.map((item) => (item.id === responseItem.id ? { ...item, status: 'completed' } : item)),
+          prev.map((item) =>
+            item.id === responseItem.id ? { ...item, status: 'completed' } : item,
+          ),
         )
       }
 
@@ -237,7 +244,12 @@ const useLLM = (addMessage) => {
       setRunContext((prev) =>
         prev.map((item) =>
           item.id === responseItem.id
-            ? { ...item, status: 'error', judgeText: `Re-evaluation failed: ${error.message}`, error: error.message }
+            ? {
+                ...item,
+                status: 'error',
+                judgeText: `Re-evaluation failed: ${error.message}`,
+                error: error.message,
+              }
             : item,
         ),
       )
@@ -326,10 +338,13 @@ const useLLM = (addMessage) => {
       socket.emit('generate', { id: requestId, prompt, options: requestOptions })
 
       // Timeout after 5 minutes
-      setTimeout(() => {
-        cleanup()
-        reject(new Error('Generation request timed out'))
-      }, 5 * 60 * 1000)
+      setTimeout(
+        () => {
+          cleanup()
+          reject(new Error('Generation request timed out'))
+        },
+        5 * 60 * 1000,
+      )
     })
   }
 
@@ -418,7 +433,12 @@ const useLLM = (addMessage) => {
         setRunContext((prev) =>
           prev.map((item) =>
             item.id === responseId
-              ? { ...item, status: 'error', judgeText: `Generation failed: ${error.message}`, error: error.message }
+              ? {
+                  ...item,
+                  status: 'error',
+                  judgeText: `Generation failed: ${error.message}`,
+                  error: error.message,
+                }
               : item,
           ),
         )
@@ -429,7 +449,12 @@ const useLLM = (addMessage) => {
       setRunContext((prev) =>
         prev.map((item) =>
           item.id === responseId
-            ? { ...item, status: 'evaluating', modelContent: llmResponse, modelReasoning: llmReasoning }
+            ? {
+                ...item,
+                status: 'evaluating',
+                modelContent: llmResponse,
+                modelReasoning: llmReasoning,
+              }
             : item,
         ),
       )
@@ -452,7 +477,12 @@ const useLLM = (addMessage) => {
         setRunContext((prev) =>
           prev.map((item) =>
             item.id === responseId
-              ? { ...item, status: 'error', judgeText: `Evaluation failed: ${error.message}`, error: error.message }
+              ? {
+                  ...item,
+                  status: 'error',
+                  judgeText: `Evaluation failed: ${error.message}`,
+                  error: error.message,
+                }
               : item,
           ),
         )
@@ -475,7 +505,11 @@ const useLLM = (addMessage) => {
       // Set status to completed only if evaluation was valid and not already error
       if (isValidEvaluation) {
         setRunContext((prev) =>
-          prev.map((item) => (item.id === responseId && item.status !== 'error' ? { ...item, status: 'completed' } : item)),
+          prev.map((item) =>
+            item.id === responseId && item.status !== 'error'
+              ? { ...item, status: 'completed' }
+              : item,
+          ),
         )
       }
 
@@ -559,6 +593,7 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
       return new Promise((resolve, reject) => {
         let judgeResponse = ''
         let judgeReasoning = ''
+        let timeoutId
 
         const handleChunk = (data) => {
           if (data.id === responseId) {
@@ -577,12 +612,14 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
             // Set status to parsing
             setRunContext((prev) =>
               prev.map((item) =>
-                item.id === responseId ? {
-                  ...item,
-                  status: 'parsing',
-                  judgeText: fullResponse,
-                  judgeReasoning: fullReasoning
-                } : item,
+                item.id === responseId
+                  ? {
+                      ...item,
+                      status: 'parsing',
+                      judgeText: fullResponse,
+                      judgeReasoning: fullReasoning,
+                    }
+                  : item,
               ),
             )
 
@@ -591,21 +628,24 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
               const evaluation = parseEvaluation(fullResponse)
 
               // Check if evaluation is valid (not null/undefined)
-              const isValidEvaluation = evaluation && (evaluation.gradingBasis || evaluation.score != null || evaluation.explanation)
+              const isValidEvaluation =
+                evaluation &&
+                (evaluation.gradingBasis || evaluation.score != null || evaluation.explanation)
 
               setRunContext((prev) =>
                 prev.map((item) =>
                   item.id === responseId
                     ? {
-                      ...item,
-                      status: isValidEvaluation ? 'scoring' : 'error',
-                      gradingBasis: evaluation?.gradingBasis || null,
-                      score: evaluation?.score || null,
-                      json: evaluation?.json || null,
-                      explanation:
-                        evaluation?.explanation || (isValidEvaluation ? null : 'Evaluation parsing failed'),
-                      error: isValidEvaluation ? undefined : 'Evaluation parsing failed',
-                    }
+                        ...item,
+                        status: isValidEvaluation ? 'scoring' : 'error',
+                        gradingBasis: evaluation?.gradingBasis || null,
+                        score: evaluation?.score || null,
+                        json: evaluation?.json || null,
+                        explanation:
+                          evaluation?.explanation ||
+                          (isValidEvaluation ? null : 'Evaluation parsing failed'),
+                        error: isValidEvaluation ? undefined : 'Evaluation parsing failed',
+                      }
                     : item,
                 ),
               )
@@ -617,7 +657,12 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
               setRunContext((prev) =>
                 prev.map((item) =>
                   item.id === responseId
-                    ? { ...item, status: 'error', judgeText: `Parsing failed: ${parseError.message}`, error: parseError.message }
+                    ? {
+                        ...item,
+                        status: 'error',
+                        judgeText: `Parsing failed: ${parseError.message}`,
+                        error: parseError.message,
+                      }
                     : item,
                 ),
               )
@@ -633,7 +678,9 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
             console.error('Evaluation streaming error:', error)
             setRunContext((prev) =>
               prev.map((item) =>
-                item.id === responseId ? { ...item, status: 'error', judgeText: error.message, error: error.message } : item,
+                item.id === responseId
+                  ? { ...item, status: 'error', judgeText: error.message, error: error.message }
+                  : item,
               ),
             )
             cleanup()
@@ -658,22 +705,30 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
             ...JUDGE_MODEL,
             model: judgeModel,
             provider: judgeProvider,
-          }
+          },
         })
 
         // Timeout after 5 minutes
-        setTimeout(() => {
-          cleanup()
-          console.error('Evaluation request timed out')
-          setRunContext((prev) =>
-            prev.map((item) =>
-              item.id === responseId
-                ? { ...item, status: 'error', judgeText: 'Evaluation request timed out', error: 'Evaluation request timed out' }
-                : item,
-            ),
-          )
-          reject(new Error('Evaluation request timed out'))
-        }, 5 * 60 * 1000)
+        timeoutId = setTimeout(
+          () => {
+            cleanup()
+            console.error('Evaluation request timed out')
+            setRunContext((prev) =>
+              prev.map((item) =>
+                item.id === responseId
+                  ? {
+                      ...item,
+                      status: 'error',
+                      judgeText: 'Evaluation request timed out',
+                      error: 'Evaluation request timed out',
+                    }
+                  : item,
+              ),
+            )
+            reject(new Error('Evaluation request timed out'))
+          },
+          5 * 60 * 1000,
+        )
       })
     } catch (error) {
       console.error('Judge evaluation failed:', error)

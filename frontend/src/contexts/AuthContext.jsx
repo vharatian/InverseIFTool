@@ -12,8 +12,6 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
 
-
-
   // Load auth state from localStorage on mount
   useEffect(() => {
     const loadAuthState = () => {
@@ -117,7 +115,7 @@ export const AuthProvider = ({ children }) => {
         await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/auth/logout`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         })
@@ -143,6 +141,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     token,
+    refreshToken,
     isLoading,
     isAuthenticated: !!token && !!user,
     login,
@@ -152,9 +151,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      <SocketProvider token={token}>
-        {children}
-      </SocketProvider>
+      <SocketProvider token={token}>{children}</SocketProvider>
     </AuthContext.Provider>
   )
 }

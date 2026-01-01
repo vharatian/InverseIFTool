@@ -5,7 +5,7 @@ import PropTypes from 'prop-types'
 /**
  * Component for displaying batch run statistics and scoreboard
  * @param {Object} props - Component props
-  * @param {boolean} props.isRunning - Whether a batch is currently running
+ * @param {boolean} props.isRunning - Whether a batch is currently running
  * @param {Object} props.scoreState - Score state with batch statistics
  * @param {number} props.scoreState.attempts - Total number of attempts
  * @param {number} props.scoreState.wins - Number of successful runs

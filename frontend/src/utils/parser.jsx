@@ -24,7 +24,10 @@ export function parseEvaluation(text) {
   }
 
   // Log the raw text for debugging
-  console.log('Parsing evaluation response:', text.substring(0, 500) + (text.length > 500 ? '...' : ''))
+  console.log(
+    'Parsing evaluation response:',
+    text.substring(0, 500) + (text.length > 500 ? '...' : ''),
+  )
 
   // Grading Basis (JSON)
   const gradingBasisRaw = extractSection('Grading Basis')

@@ -9,7 +9,7 @@ export class LlmService {
   private currentProvider: LLMProviderConfig | null = null;
   private defaultOptions: any = {};
 
-  constructor(private configService: ConfigService) { }
+  constructor(private configService: ConfigService) {}
 
   /**
    * Get provider config by model name (assumes model format: provider/model)
@@ -184,10 +184,10 @@ export class LlmService {
             model,
             usage: completion.usage
               ? {
-                promptTokens: completion.usage.prompt_tokens,
-                completionTokens: completion.usage.completion_tokens,
-                totalTokens: completion.usage.total_tokens,
-              }
+                  promptTokens: completion.usage.prompt_tokens,
+                  completionTokens: completion.usage.completion_tokens,
+                  totalTokens: completion.usage.total_tokens,
+                }
               : undefined,
             timestamp: new Date().toISOString(),
           });
@@ -340,10 +340,10 @@ export class LlmService {
             model: completionOptions.model,
             usage: completion.usage
               ? {
-                promptTokens: completion.usage.prompt_tokens,
-                completionTokens: completion.usage.completion_tokens,
-                totalTokens: completion.usage.total_tokens,
-              }
+                  promptTokens: completion.usage.prompt_tokens,
+                  completionTokens: completion.usage.completion_tokens,
+                  totalTokens: completion.usage.total_tokens,
+                }
               : undefined,
             responsePreview:
               response.substring(0, 200) + (response.length > 200 ? '...' : ''),
@@ -567,7 +567,7 @@ export class LlmService {
         instructions,
         reasoning: {
           effort: options.reasoning_effort,
-          summary: "auto",
+          summary: 'auto',
         },
         temperature: baseOptions.temperature,
         max_tokens: baseOptions.max_tokens,
@@ -618,20 +618,24 @@ export class LlmService {
 
             if (useResponsesAPI) {
               // Handle responses API event types
-              if (chunk.type === 'response.reasoning_text.delta' || chunk.type === 'response.reasoning_summary_text.delta') {
+              if (
+                chunk.type === 'response.reasoning_text.delta' ||
+                chunk.type === 'response.reasoning_summary_text.delta'
+              ) {
                 reasoningToken = chunk.delta || '';
               } else if (chunk.type === 'response.output_text.delta') {
                 contentToken = chunk.delta || '';
               } else if (chunk.type === 'error') {
                 // Handle streaming error events
-                throw new Error(`Streaming error: ${chunk.message} (code: ${chunk.code})`);
+                throw new Error(
+                  `Streaming error: ${chunk.message} (code: ${chunk.code})`,
+                );
               }
               // Skip other event types
             } else {
               // For chat completions API
               contentToken = chunk.choices[0]?.delta?.content || '';
               reasoningToken = chunk.choices[0]?.delta.reasoning || '';
-
             }
 
             // Emit chunk with both content and reasoning tokens
@@ -640,14 +644,14 @@ export class LlmService {
                 'chunk',
                 id
                   ? {
-                    id,
-                    chunk: contentToken,
-                    reasoning: reasoningToken,
-                  }
+                      id,
+                      chunk: contentToken,
+                      reasoning: reasoningToken,
+                    }
                   : {
-                    chunk: contentToken,
-                    reasoning: reasoningToken,
-                  },
+                      chunk: contentToken,
+                      reasoning: reasoningToken,
+                    },
               );
             }
 

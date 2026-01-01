@@ -10,13 +10,12 @@ import JsonArrayTextarea from '../../../components/JsonArrayTextarea'
  * @param {string} props.criteriaJson - The criteria JSON string
  * @param {string} props.judgeSystemPrompt - The judge system prompt
  * @param {number} props.maxTry - Maximum number of attempts
-  * @param {boolean} props.isRunning - Whether form is running
+ * @param {boolean} props.isRunning - Whether form is running
  * @param {Function} props.onPromptChange - Handler for prompt change
  * @param {Function} props.onIdealResponseChange - Handler for ideal response change
  * @param {Function} props.onCriteriaJsonChange - Handler for criteria JSON change
  * @param {Function} props.onJudgeSystemPromptChange - Handler for judge system prompt change
  * @param {Function} props.onMaxTryChange - Handler for max attempts change
- * @param {Function} props.onJsonValid - Handler for valid JSON
  */
 const PromptFormFields = ({
   prompt,
@@ -30,7 +29,6 @@ const PromptFormFields = ({
   onCriteriaJsonChange,
   onJudgeSystemPromptChange,
   onMaxTryChange,
-  onJsonValid,
 }) => {
   return (
     <>
@@ -77,7 +75,6 @@ const PromptFormFields = ({
           rows={8}
           value={criteriaJson}
           onChange={onCriteriaJsonChange}
-          onValidJson={onJsonValid}
         />
         <div className="mb-3">
           <CFormLabel htmlFor="maxTryInput">Max Attempts (default: 20)</CFormLabel>
@@ -114,7 +111,6 @@ PromptFormFields.propTypes = {
   onCriteriaJsonChange: PropTypes.func.isRequired,
   onJudgeSystemPromptChange: PropTypes.func.isRequired,
   onMaxTryChange: PropTypes.func.isRequired,
-  onJsonValid: PropTypes.func.isRequired,
 }
 
 export default PromptFormFields
