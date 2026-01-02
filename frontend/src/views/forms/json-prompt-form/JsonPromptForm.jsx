@@ -332,7 +332,7 @@ const JsonPromptForm = () => {
                   className="m-2"
                   color="success"
                   onClick={handleExport}
-                  disabled={isRunning || runContext.length === 0}
+                // disabled={isRunning || runContext.length === 0}
                 >
                   Export .ipynb
                 </CButton>
@@ -346,14 +346,6 @@ const JsonPromptForm = () => {
                   Import from .ipynb
                 </CButton>
 
-                <CButton
-                  className="m-2"
-                  color="info"
-                  onClick={() => setShowGoogleDriveModal(true)}
-                  disabled={isRunning}
-                >
-                  Download from Drive/Colab
-                </CButton>
               </CForm>
             </CCardBody>
           </CCard>
@@ -365,36 +357,6 @@ const JsonPromptForm = () => {
         runContext={runContext}
         onReEvaluate={handleReEvaluate}
       />
-
-      <CModal
-        visible={showGoogleDriveModal}
-        onClose={() => setShowGoogleDriveModal(false)}
-        alignment="center"
-      >
-        <CModalHeader>
-          <strong>Download from Google Drive or Colab</strong>
-        </CModalHeader>
-        <CModalBody>
-          <CForm>
-            <div className="mb-3">
-              <CFormLabel htmlFor="googleDriveUrl">Google Drive URL or File ID</CFormLabel>
-              <CFormInput
-                type="text"
-                id="googleDriveUrl"
-                placeholder="https://drive.google.com/file/d/... or https://colab.research.google.com/drive/... or file ID"
-                value={googleDriveUrl}
-                onChange={(e) => setGoogleDriveUrl(e.target.value)}
-                autoFocus
-              />
-            </div>
-          </CForm>
-        </CModalBody>
-        <CModalFooter>
-          <CButton color="secondary" onClick={() => setShowGoogleDriveModal(false)}>
-            Cancel
-          </CButton>
-        </CModalFooter>
-      </CModal>
 
       <ImportModal
         visible={showImportModal}

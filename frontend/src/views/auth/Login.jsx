@@ -98,20 +98,6 @@ const Login = () => {
               </CButton>
             </CForm>
 
-            <div className="mt-3 text-center">
-              <p className="mb-0">Default admin credentials:</p>
-              <small className="text-muted">
-                Email: admin@example.com
-                <br />
-                Password: admin123
-              </small>
-            </div>
-
-            <div className="text-center mt-3">
-              <p>
-                Don't have an account? <Link to="/register">Sign up</Link>
-              </p>
-            </div>
           </CCardBody>
         </CCard>
       </CCol>

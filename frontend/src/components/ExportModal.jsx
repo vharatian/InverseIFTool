@@ -26,6 +26,7 @@ const ExportModal = ({ visible, onClose, formData, importedNotebook }) => {
   const [fileNameInput, setFileNameInput] = useState('')
   const [urlInput, setUrlInput] = useState('')
   const [modelName, setModelName] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
 
   // Initialize selected responses when modal opens
   useEffect(() => {
@@ -38,7 +39,6 @@ const ExportModal = ({ visible, onClose, formData, importedNotebook }) => {
 
 
   useEffect(() => {
-    console.log("imported data detected", importedNotebook)
     if (importedNotebook) {
       importedNotebook.source && setActiveTab(importedNotebook.source)
       if (importedNotebook.sourceData && importedNotebook.source === 'file')
@@ -82,16 +82,12 @@ const ExportModal = ({ visible, onClose, formData, importedNotebook }) => {
 
       let notebookJson
 
-      console.log("input formdata", formData)
       if (importedNotebook && exportFormat === 'notebook') {
         // Use updateNotebook to merge form data with original notebook
         notebookJson = updateNotebook(importedNotebook.notebook, filteredFormData)
-        console.log("update notebookJson", notebookJson)
       } else {
         // Generate new notebook from scratch
         notebookJson = generateNotebookTemplate(filteredFormData)
-        console.log("generate notebookJson", notebookJson)
-
       }
 
       const blob = new Blob([notebookJson], { type: 'application/json' })
@@ -102,8 +98,8 @@ const ExportModal = ({ visible, onClose, formData, importedNotebook }) => {
 
         const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
         const filename = fileNameInput
-          ? `updated_evaluation_${timestamp}.ipynb`
-          : `evaluation_${timestamp}.ipynb`
+          || `updated_evaluation_${timestamp}.ipynb`
+
 
         const a = document.createElement('a')
         a.href = url
@@ -113,12 +109,15 @@ const ExportModal = ({ visible, onClose, formData, importedNotebook }) => {
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
       } else if (activeTab === 'url') {
-        googleDriveApi.updateFile(urlInput, blob, 'application/json')
+        await googleDriveApi.updateFile(urlInput, blob, 'application/json')
       }
 
-      // onClose()
-    } catch (error) {
-      console.error('Export failed:', error)
+      onClose()
+    } catch (e) {
+      console.error('Export failed:', e)
+      setErrorMessage(e?.response?.data?.message
+        || e?.message
+        || 'Unknown error')
       // Could add error state here if needed
     } finally {
       setIsExporting(false)
@@ -142,7 +141,7 @@ const ExportModal = ({ visible, onClose, formData, importedNotebook }) => {
 
 
   return (
-    <CModal visible={visible} onClose={onClose} alignment="center">
+    <CModal visible={visible} onClose={onClose} alignment="center" size='lg'>
       <CModalHeader>
         <strong>Export Evaluation</strong>
       </CModalHeader>
@@ -177,7 +176,6 @@ const ExportModal = ({ visible, onClose, formData, importedNotebook }) => {
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                 />
-                <small className="text-muted">URL import coming soon</small>
               </div>
             </CTabPanel>
 
@@ -260,6 +258,14 @@ const ExportModal = ({ visible, onClose, formData, importedNotebook }) => {
           <CAlert color="warning">
             <strong>Note:</strong> Exporting will preserve the original notebook structure and
             update/modify existing sections with current form data.
+          </CAlert>
+        )}
+
+        {errorMessage && (
+          <CAlert color='danger'>
+            <strong>Export Failed</strong>
+            <br />
+            {errorMessage}
           </CAlert>
         )}
       </CModalBody>

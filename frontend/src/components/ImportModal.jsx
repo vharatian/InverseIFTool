@@ -159,7 +159,7 @@ const ImportModal = ({ visible, onClose, onImportData }) => {
       return textContent
     } catch (error) {
       console.error('Google Drive download error:', error)
-      addMessage(
+      setValidationMessages(
         `❌ Failed to download file: ${error.response?.data?.message || error.message}`,
         'error',
         'google-drive',
@@ -205,7 +205,6 @@ const ImportModal = ({ visible, onClose, onImportData }) => {
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                 />
-                <small className="text-muted">URL import coming soon</small>
               </div>
             </CTabPanel>
 
