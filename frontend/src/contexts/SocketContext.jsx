@@ -11,12 +11,9 @@ export const SocketProvider = ({ children, token }) => {
     if (token && !socketRef.current) {
       // Create persistent socket connection
       // Use explicit backend URL for WebSocket connection
-      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002'
-      const socketUrl = backendUrl.startsWith('http')
-        ? backendUrl.replace(/^http/, 'ws')
-        : `ws://localhost:3002`
 
-      const socket = io(`${socketUrl}/llm`, {
+      const socket = io('/llm', {
+        path: '/socket.io',
         transports: ['websocket'],
         auth: { token },
         reconnection: true,

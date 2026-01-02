@@ -11,8 +11,9 @@ import { ConfigService } from '../config/config.service';
 import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({
+  path: '/socket.io',
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: '*',
     credentials: true,
   },
   namespace: '/llm',
@@ -25,7 +26,7 @@ export class LlmGateway {
     private readonly llmService: LlmService,
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   async handleConnection(client: Socket) {
     const token = client.handshake.auth?.token;

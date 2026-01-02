@@ -34,6 +34,10 @@ export default defineConfig(() => {
           changeOrigin: true,
           ws: true,
         },
+        '/socket.io': {
+          target: 'ws://localhost:3002',
+          ws: true,
+        },
       },
     },
   }
