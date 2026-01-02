@@ -274,4 +274,8 @@ export const googleDriveApi = {
   },
 }
 
+export const modelApi = {
+  getAll: () => api.get('/models')
+}
+
 export default api

@@ -23,8 +23,9 @@ services:
        - LLM_OPENROUTER_DEFAULT_MODEL=openai/gpt-4o-mini
        - LLM_OPENROUTER_MODELS=openai/gpt-4o-mini,anthropic/claude-3-haiku
        - ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
+       - GOOGLE_DRIVE_CREDENTIALS_PATH=data/service-account.json
      volumes:
-       - db_data:/app/data
+       - ./data:/app/data
 
    frontend:
      build: ./frontend

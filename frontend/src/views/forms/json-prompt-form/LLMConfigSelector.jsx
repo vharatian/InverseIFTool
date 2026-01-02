@@ -1,5 +1,6 @@
 import { CCol, CFormLabel, CFormSelect, CRow } from '@coreui/react'
 import PropTypes from 'prop-types'
+import { useEffect } from 'react'
 
 /**
  * Component for selecting LLM models for test and judge roles
@@ -21,14 +22,10 @@ const LLMConfigSelector = ({
   onJudgeModelChange,
 }) => {
   // Create a flat list of all available models with their provider info
-  const allModels =
-    llmConfigs?.flatMap((config) =>
-      config.models.map((model) => ({
-        model,
-        provider: config.provider,
-        displayName: `${model} (${config.provider})`,
-      })),
-    ) || []
+  //
+  useEffect(() => {
+    console.log(llmConfigs)
+  }, [llmConfigs])
 
   return (
     <CRow>
@@ -42,9 +39,9 @@ const LLMConfigSelector = ({
             disabled={configLoading}
           >
             <option value="">Select Test Model</option>
-            {allModels.map(({ model, provider, displayName }) => (
-              <option key={`${provider}-${model}`} value={model}>
-                {displayName}
+            {llmConfigs.test?.map(({ option }) => (
+              <option key={option} value={option}>
+                {option}
               </option>
             ))}
           </CFormSelect>
@@ -60,9 +57,9 @@ const LLMConfigSelector = ({
             disabled={configLoading}
           >
             <option value="">Select Judge Model</option>
-            {allModels.map(({ model, provider, displayName }) => (
-              <option key={`judge-${provider}-${model}`} value={model}>
-                {displayName}
+            {llmConfigs.judge?.map(({ option }) => (
+              <option key={option} value={option}>
+                {option}
               </option>
             ))}
           </CFormSelect>

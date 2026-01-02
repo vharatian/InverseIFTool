@@ -1,0 +1,17 @@
+test:
+  options:
+    - option: nemotron
+      model: openrouter/nvidia/nemotron-3-nano-30b-a3b
+      provider: liteLLM
+      params:
+        temperature: 1
+        top_p: 1
+
+judge:
+  options:
+    - option: gpt-5
+      provider: liteLLM
+      model: gpt-5
+      params:
+        reasoning_effort: medium
+        openaiReasoning: true

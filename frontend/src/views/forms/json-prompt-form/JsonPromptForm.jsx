@@ -7,17 +7,9 @@ import {
   CCol,
   CForm,
   CRow,
-  CModal,
-  CModalHeader,
-  CModalBody,
-  CModalFooter,
-  CFormInput,
-  CFormLabel,
 } from '@coreui/react'
 import useLLM from '../../../hooks/useLLM'
 import { useLog } from '../../../contexts/LogContext'
-import { generateNotebookTemplate } from '../../../utils/notebook'
-import { googleDriveApi } from '../../../services/api'
 import ImportModal from '../../../components/ImportModal'
 import ExportModal from '../../../components/ExportModal'
 import {
@@ -35,15 +27,9 @@ const JsonPromptForm = () => {
   const [prompt, setPrompt] = useState('')
   const [judgeSystemPrompt, setJudgeSystemPrompt] = useState('')
   const [maxTry, setMaxTry] = useState(5)
-  const [judgeProvider, setJudgeProvider] = useState('')
   const [judgeModel, setJudgeModel] = useState('')
-  const [testProvider, setTestProvider] = useState('')
   const [testModel, setTestModel] = useState('')
   const [importedNotebook, setImportedNotebook] = useState(null)
-
-  // Google Drive modal state
-  const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false)
-  const [googleDriveUrl, setGoogleDriveUrl] = useState('')
 
   // Import modal state
   const [showImportModal, setShowImportModal] = useState(false)
@@ -72,11 +58,6 @@ const JsonPromptForm = () => {
     resetResults,
   } = useLLM(addMessage)
 
-  // Helper function to find provider for a given model
-  const findProviderForModel = (model) => {
-    if (!model || !llmConfigs) return null
-    return llmConfigs.find((config) => config.models.includes(model))?.provider || null
-  }
 
   const handleCriteriaChange = (c) => {
     setCriteriaText(c)
@@ -90,19 +71,16 @@ const JsonPromptForm = () => {
 
 
   const handleTestModelChange = (model) => {
+    console.log("handle test model")
     setTestModel(model)
-    const provider = findProviderForModel(model)
-    if (provider) setTestProvider(provider)
   }
 
   const handleJudgeModelChange = (model) => {
     setJudgeModel(model)
-    const provider = findProviderForModel(model)
-    if (provider) setJudgeProvider(provider)
   }
 
   const handleReEvaluate = (responseItem) => {
-    reEvaluate(responseItem, criteriaJson, prompt, judgeModel, judgeProvider, judgeSystemPrompt)
+    reEvaluate(responseItem, criteriaJson, prompt, judgeModel, judgeSystemPrompt)
   }
 
   const handleExport = () => {
@@ -144,13 +122,13 @@ const JsonPromptForm = () => {
     try {
       if (action === 'run') {
         // Validate required fields
-        if (!testModel || !testProvider) {
+        if (!testModel) {
           console.error('Missing test model/provider')
           alert('Please select a test model and provider')
           addMessage('❌ Please select a test model and provider', 'error', 'system')
           return
         }
-        if (!judgeModel || !judgeProvider) {
+        if (!judgeModel) {
           console.error('Missing judge model/provider')
           alert('Please select a judge model and provider')
           addMessage('❌ Please select a judge model and provider', 'error', 'system')
@@ -164,8 +142,8 @@ const JsonPromptForm = () => {
         }
 
         addMessage(`🚀 Starting batch run [${runId}] with ${maxTry} attempts`, 'info', 'batch')
-        addMessage(`📝 Test Model: ${testModel} (${testProvider})`, 'info', 'batch')
-        addMessage(`🔍 Judge Model: ${judgeModel} (${judgeProvider})`, 'info', 'batch')
+        addMessage(`📝 Test Model: ${testModel} `, 'info', 'batch')
+        addMessage(`🔍 Judge Model: ${judgeModel} `, 'info', 'batch')
         addMessage(`🎯 Goal: 4 successful evaluations`, 'info', 'batch')
 
         await batch(
@@ -173,9 +151,7 @@ const JsonPromptForm = () => {
           criteriaJson,
           maxTry,
           4,
-          testProvider,
           testModel,
-          judgeProvider,
           judgeModel,
           judgeSystemPrompt,
           runId,
@@ -191,14 +167,13 @@ const JsonPromptForm = () => {
       }
       if (action === 'test') {
         addMessage(`🧪 Starting manual test [${runId}] evaluation`, 'info', 'test')
-        addMessage(`📝 Test Model: ${testModel} (${testProvider})`, 'info', 'test')
-        addMessage(`🔍 Judge Model: ${judgeModel} (${judgeProvider})`, 'info', 'test')
+        addMessage(`📝 Test Model: ${testModel} `, 'info', 'test')
+        addMessage(`🔍 Judge Model: ${judgeModel} `, 'info', 'test')
 
         await addManualResponse(
           prompt,
           idealResponse,
           criteriaJson,
-          judgeProvider,
           judgeModel,
           judgeSystemPrompt,
           runId,
@@ -218,41 +193,17 @@ const JsonPromptForm = () => {
   useEffect(() => { }, [runContext])
 
   useEffect(() => {
-    if (llmConfigs && llmConfigs.length > 0 && !configLoading) {
-      addMessage(
-        `LLM configuration loaded. ${llmConfigs.length} provider(s) available.`,
-        'success',
-        'config',
-      )
-
-      // Set default models if none are selected
-      if (!testModel) {
-        const activeConfig = llmConfigs.find((c) => c.isActive) || llmConfigs[0]
-        if (activeConfig) {
-          setTestModel(activeConfig.defaultModel)
-
-          setTestProvider(activeConfig.provider)
-          addMessage(`Set default test model: ${activeConfig.defaultModel}`, 'info', 'config')
-        }
+    ['test', 'judge'].forEach(agent => {
+      const opt = llmConfigs[agent]?.filter(i => i.name = agent).at(0)
+      if (opt) {
+        console.log("find default opt for model", agent, opt)
+        agent === 'test' && setTestModel(opt.option)
+        agent === 'judge' && setJudgeModel(opt.option)
       }
-      if (!judgeModel) {
-        const activeConfig = llmConfigs.find((c) => c.isActive) || llmConfigs[0]
-        if (activeConfig) {
-          setJudgeModel(activeConfig.defaultModel)
 
-          setJudgeProvider(activeConfig.provider)
-          addMessage(`Set default judge model: ${activeConfig.defaultModel}`, 'info', 'config')
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [llmConfigs, configLoading])
+    })
+  }, [llmConfigs])
 
-  useEffect(() => {
-    if (configLoading) {
-      addMessage('Loading LLM configuration...', 'info', 'config')
-    }
-  }, [configLoading, addMessage])
 
   return (
     <>

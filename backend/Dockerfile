@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm install -g nest && yarn install
 
 COPY . .
-RUN yarn build && yarn seed
+RUN yarn build 
 
 EXPOSE 3002
 CMD ["yarn", "start"]

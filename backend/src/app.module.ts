@@ -7,6 +7,7 @@ import { ConfigModule } from './config/config.module';
 import { AuthModule } from './auth/auth.module';
 import { LlmModule } from './llm/llm.module';
 import { GoogleDriveModule } from './google-drive/google-drive.module';
+import { ModelModule } from './model/model.module';
 
 @Module({
   imports: [
@@ -22,8 +23,9 @@ import { GoogleDriveModule } from './google-drive/google-drive.module';
     AuthModule,
     LlmModule,
     GoogleDriveModule,
+    ModelModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

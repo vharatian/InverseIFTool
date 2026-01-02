@@ -46,8 +46,8 @@ const ActivityConsole = ({ configLoading, llmConfigs }) => {
     if (configLoading) {
       return { text: 'Loading LLM configuration...', type: 'info' }
     }
-    if (llmConfigs && llmConfigs.length > 0) {
-      return { text: `Connected to ${llmConfigs.length} LLM provider(s)`, type: 'success' }
+    if (llmConfigs) {
+      return { text: `Connected to ${llmConfigs} LLM provider(s)`, type: 'success' }
     }
     return { text: 'Using fallback configuration (check backend connection)', type: 'warning' }
   }

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useMemo } from 'react'
-import { configApi } from '../services'
+import { modelApi } from '../services'
 import { useSocket } from '../contexts/SocketContext'
 import { cib500px } from '@coreui/icons'
 import { sleep } from '../utils/tools'
 import { parseEvaluation } from '../utils/parser'
+import { configs } from 'eslint-plugin-prettier'
 
 /**
  * Default options for test model generation (creative, varied responses)
@@ -87,9 +88,16 @@ const useLLM = (addMessage) => {
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        const response = await configApi.getAll()
+        const response = await modelApi.getAll()
+        console.log(response)
         const configs = response.data
-        setLlmConfigs(configs)
+        console.log("config fetched", configs)
+        const allModels =
+          configs.reduce((acc, item) => {
+            acc[item.name] = item.options
+            return acc
+          }, {})
+        setLlmConfigs(allModels)
       } catch (error) {
         console.warn('Could not fetch LLM configs from backend:', error.message)
         // No fallback - require backend to be running for configs
@@ -108,12 +116,18 @@ const useLLM = (addMessage) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const getModelOptions = (name, agent) => {
+    console.log("get llm options", name)
+    const conf = llmConfigs[agent]?.filter(i => i.option === name).at(0)
+    console.log("model options", conf, llmConfigs, name, agent)
+    return conf
+  }
+
   /**
    * Add a manual response and evaluate it against criteria
    * @param {string} prompt - The original prompt
    * @param {string} response - The manual response to evaluate
    * @param {Array} validatedJson - Validation criteria array
-   * @param {string} judgeProvider - Provider to use for evaluation
    * @param {string} judgeModel - Model to use for evaluation
    * @param {string} judgeSystemPrompt - System prompt for judge
    * @param {string} runId - Run identifier
@@ -123,7 +137,6 @@ const useLLM = (addMessage) => {
     prompt,
     response,
     validatedJson,
-    judgeProvider,
     judgeModel,
     judgeSystemPrompt,
     runId,
@@ -143,7 +156,6 @@ const useLLM = (addMessage) => {
         prompt,
         responseId,
         judgeModel,
-        judgeProvider,
         judgeSystemPrompt,
         runId,
       )
@@ -191,7 +203,6 @@ const useLLM = (addMessage) => {
    * @param {Array} criteria - Evaluation criteria array
    * @param {string} prompt - Original prompt
    * @param {string} judgeModel - Judge model to use
-   * @param {string} judgeProvider - Judge provider
    * @param {string} judgeSystemPrompt - System prompt for judge
    */
   const reEvaluate = async (
@@ -199,7 +210,6 @@ const useLLM = (addMessage) => {
     criteria,
     prompt,
     judgeModel,
-    judgeProvider,
     judgeSystemPrompt,
   ) => {
     addMessage(`Re-evaluating response [${responseItem.id}]`, 'info', 'reevaluate')
@@ -216,7 +226,6 @@ const useLLM = (addMessage) => {
         prompt,
         responseItem.id,
         judgeModel,
-        judgeProvider,
         judgeSystemPrompt,
         responseItem.runId,
       )
@@ -245,11 +254,11 @@ const useLLM = (addMessage) => {
         prev.map((item) =>
           item.id === responseItem.id
             ? {
-                ...item,
-                status: 'error',
-                judgeText: `Re-evaluation failed: ${error.message}`,
-                error: error.message,
-              }
+              ...item,
+              status: 'error',
+              judgeText: `Re-evaluation failed: ${error.message}`,
+              error: error.message,
+            }
             : item,
         ),
       )
@@ -275,13 +284,14 @@ const useLLM = (addMessage) => {
    * Generate a response from an LLM model
    * @param {string} prompt - The prompt to send to the model
    * @param {string} model - Model identifier
-   * @param {string} provider - Provider name
    * @returns {Promise<string>} The generated response text
    */
-  const generate = async (prompt, model, provider) => {
+  const generate = async (prompt, modelName) => {
     if (!socket || !isConnected) {
       throw new Error('WebSocket not connected. Please check your authentication.')
     }
+
+    const { model, provider, params } = getModelOptions(modelName, 'test')
 
     console.log('Sending generation request to backend:', {
       model,
@@ -290,7 +300,7 @@ const useLLM = (addMessage) => {
       promptPreview: prompt.substring(0, 200) + (prompt.length > 200 ? '...' : ''),
     })
 
-    const requestOptions = { ...TEST_MODEL_OPTIONS, model, provider }
+    const requestOptions = { ...params, model, provider }
     const requestId = `gen_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     return new Promise((resolve, reject) => {
@@ -396,9 +406,7 @@ const useLLM = (addMessage) => {
    * @param {string} prompt - Prompt to test
    * @param {Array} criteria - Evaluation criteria
    * @param {string} testModel - Test model
-   * @param {string} testProvider - Test provider
    * @param {string} judgeModel - Judge model
-   * @param {string} judgeProvider - Judge provider
    * @param {string} judgeSystemPrompt - Judge system prompt
    * @param {string} runId - Run identifier
    * @returns {Promise<Object>} Evaluation result
@@ -407,9 +415,7 @@ const useLLM = (addMessage) => {
     prompt,
     criteria,
     testModel,
-    testProvider,
     judgeModel,
-    judgeProvider,
     judgeSystemPrompt,
     runId,
   ) => {
@@ -425,7 +431,7 @@ const useLLM = (addMessage) => {
       let llmResponse, llmReasoning
       try {
         // Generate response
-        const result = await generate(prompt, testModel, testProvider)
+        const result = await generate(prompt, testModel)
         llmResponse = result.response
         llmReasoning = result.reasoning
       } catch (error) {
@@ -434,11 +440,11 @@ const useLLM = (addMessage) => {
           prev.map((item) =>
             item.id === responseId
               ? {
-                  ...item,
-                  status: 'error',
-                  judgeText: `Generation failed: ${error.message}`,
-                  error: error.message,
-                }
+                ...item,
+                status: 'error',
+                judgeText: `Generation failed: ${error.message}`,
+                error: error.message,
+              }
               : item,
           ),
         )
@@ -450,11 +456,11 @@ const useLLM = (addMessage) => {
         prev.map((item) =>
           item.id === responseId
             ? {
-                ...item,
-                status: 'evaluating',
-                modelContent: llmResponse,
-                modelReasoning: llmReasoning,
-              }
+              ...item,
+              status: 'evaluating',
+              modelContent: llmResponse,
+              modelReasoning: llmReasoning,
+            }
             : item,
         ),
       )
@@ -468,7 +474,6 @@ const useLLM = (addMessage) => {
           prompt,
           responseId,
           judgeModel,
-          judgeProvider,
           judgeSystemPrompt,
           runId,
         )
@@ -478,11 +483,11 @@ const useLLM = (addMessage) => {
           prev.map((item) =>
             item.id === responseId
               ? {
-                  ...item,
-                  status: 'error',
-                  judgeText: `Evaluation failed: ${error.message}`,
-                  error: error.message,
-                }
+                ...item,
+                status: 'error',
+                judgeText: `Evaluation failed: ${error.message}`,
+                error: error.message,
+              }
               : item,
           ),
         )
@@ -527,7 +532,6 @@ const useLLM = (addMessage) => {
    * @param {string} prompt - Original prompt for context
    * @param {string} responseId - Unique identifier for this response
    * @param {string} judgeModel - Judge model to use
-   * @param {string} judgeProvider - Judge provider
    * @param {string} judgeSystemPrompt - System prompt for judge
    * @param {string} runId - Run identifier for tracking
    * @returns {Promise<Object>} Parsed evaluation result with gradingBasis, score, json, explanation
@@ -537,8 +541,7 @@ const useLLM = (addMessage) => {
     criteria,
     prompt,
     responseId,
-    judgeModel,
-    judgeProvider,
+    judgeModelName,
     judgeSystemPrompt,
     runId,
   ) => {
@@ -577,6 +580,8 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
         },
       ]
 
+      const { model: judgeModel, provider: judgeProvider, params } = getModelOptions(judgeModelName, 'judge')
+
       // Call the LLM using WebSocket streaming
       console.log('Sending evaluation request to backend:', {
         judgeModel,
@@ -614,11 +619,11 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
               prev.map((item) =>
                 item.id === responseId
                   ? {
-                      ...item,
-                      status: 'parsing',
-                      judgeText: fullResponse,
-                      judgeReasoning: fullReasoning,
-                    }
+                    ...item,
+                    status: 'parsing',
+                    judgeText: fullResponse,
+                    judgeReasoning: fullReasoning,
+                  }
                   : item,
               ),
             )
@@ -636,16 +641,16 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
                 prev.map((item) =>
                   item.id === responseId
                     ? {
-                        ...item,
-                        status: isValidEvaluation ? 'scoring' : 'error',
-                        gradingBasis: evaluation?.gradingBasis || null,
-                        score: evaluation?.score || null,
-                        json: evaluation?.json || null,
-                        explanation:
-                          evaluation?.explanation ||
-                          (isValidEvaluation ? null : 'Evaluation parsing failed'),
-                        error: isValidEvaluation ? undefined : 'Evaluation parsing failed',
-                      }
+                      ...item,
+                      status: isValidEvaluation ? 'scoring' : 'error',
+                      gradingBasis: evaluation?.gradingBasis || null,
+                      score: evaluation?.score || null,
+                      json: evaluation?.json || null,
+                      explanation:
+                        evaluation?.explanation ||
+                        (isValidEvaluation ? null : 'Evaluation parsing failed'),
+                      error: isValidEvaluation ? undefined : 'Evaluation parsing failed',
+                    }
                     : item,
                 ),
               )
@@ -658,11 +663,11 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
                 prev.map((item) =>
                   item.id === responseId
                     ? {
-                        ...item,
-                        status: 'error',
-                        judgeText: `Parsing failed: ${parseError.message}`,
-                        error: parseError.message,
-                      }
+                      ...item,
+                      status: 'error',
+                      judgeText: `Parsing failed: ${parseError.message}`,
+                      error: parseError.message,
+                    }
                     : item,
                 ),
               )
@@ -702,7 +707,7 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
           id: responseId,
           messages,
           options: {
-            ...JUDGE_MODEL,
+            ...params,
             model: judgeModel,
             provider: judgeProvider,
           },
@@ -717,11 +722,11 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
               prev.map((item) =>
                 item.id === responseId
                   ? {
-                      ...item,
-                      status: 'error',
-                      judgeText: 'Evaluation request timed out',
-                      error: 'Evaluation request timed out',
-                    }
+                    ...item,
+                    status: 'error',
+                    judgeText: 'Evaluation request timed out',
+                    error: 'Evaluation request timed out',
+                  }
                   : item,
               ),
             )
@@ -745,9 +750,7 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
    * @param {Array} criteria - Evaluation criteria array
    * @param {number} [maxTry=10] - Maximum number of attempts
    * @param {number} [goal=4] - Number of successful evaluations needed
-   * @param {string} testProvider - Provider for test model
    * @param {string} testModel - Model for generation
-   * @param {string} judgeProvider - Provider for judge model
    * @param {string} judgeModel - Model for evaluation
    * @param {string} judgeSystemPrompt - System prompt for judge
    * @param {string} runId - Run identifier
@@ -757,9 +760,7 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
     criteria,
     maxTry = 10,
     goal = 4,
-    testProvider,
     testModel,
-    judgeProvider,
     judgeModel,
     judgeSystemPrompt,
     runId,
@@ -796,9 +797,7 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
               prompt,
               criteria,
               testModel,
-              testProvider,
               judgeModel,
-              judgeProvider,
               judgeSystemPrompt,
               attemptRunId,
             ),
