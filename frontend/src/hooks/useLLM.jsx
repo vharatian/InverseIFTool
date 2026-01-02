@@ -180,7 +180,7 @@ const useLLM = (addMessage) => {
       setRunContext((prev) =>
         prev.map((item) =>
           item.id === responseId
-            ? { ...item, status: 'error', judgeText: error.message, error: error.message }
+            ? { ...item, status: 'error', error: error.message }
             : item,
         ),
       )
@@ -256,7 +256,6 @@ const useLLM = (addMessage) => {
             ? {
               ...item,
               status: 'error',
-              judgeText: `Re-evaluation failed: ${error.message}`,
               error: error.message,
             }
             : item,
@@ -442,7 +441,6 @@ const useLLM = (addMessage) => {
               ? {
                 ...item,
                 status: 'error',
-                judgeText: `Generation failed: ${error.message}`,
                 error: error.message,
               }
               : item,
@@ -485,7 +483,6 @@ const useLLM = (addMessage) => {
               ? {
                 ...item,
                 status: 'error',
-                judgeText: `Evaluation failed: ${error.message}`,
                 error: error.message,
               }
               : item,
@@ -665,7 +662,6 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
                     ? {
                       ...item,
                       status: 'error',
-                      judgeText: `Parsing failed: ${parseError.message}`,
                       error: parseError.message,
                     }
                     : item,
@@ -684,7 +680,7 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
             setRunContext((prev) =>
               prev.map((item) =>
                 item.id === responseId
-                  ? { ...item, status: 'error', judgeText: error.message, error: error.message }
+                  ? { ...item, status: 'error', error: error.message }
                   : item,
               ),
             )
@@ -724,7 +720,6 @@ Failure to PASS more than 50% of the above criteria will result in a score of 0 
                   ? {
                     ...item,
                     status: 'error',
-                    judgeText: 'Evaluation request timed out',
                     error: 'Evaluation request timed out',
                   }
                   : item,

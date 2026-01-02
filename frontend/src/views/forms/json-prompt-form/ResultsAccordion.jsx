@@ -26,10 +26,7 @@ import PropTypes from 'prop-types'
 const ResultsAccordion = ({ runContext, onReEvaluate }) => {
   const [copiedItems, setCopiedItems] = useState(new Set())
 
-  // Filter to only show contexts that have model responses
-  const filteredRunContext = runContext.filter((context) => context.modelContent)
-
-  if (filteredRunContext.length === 0) {
+  if (runContext.length === 0) {
     return null
   }
 
@@ -77,7 +74,7 @@ const ResultsAccordion = ({ runContext, onReEvaluate }) => {
   return (
     <CRow>
       <CAccordion activeItemKey={1} className="mb-5">
-        {filteredRunContext.map((context, index) => {
+        {runContext.map((context, index) => {
           return (
             <CAccordionItem itemKey={index + 1} key={context.id}>
               <CAccordionHeader>
@@ -126,7 +123,7 @@ const ResultsAccordion = ({ runContext, onReEvaluate }) => {
               <CAccordionBody>
                 <CTabs defaultActiveItemKey="response">
                   <CTabList variant="tabs">
-                    <CTab itemKey="response">Response</CTab>
+                    <CTab itemKey="response" disabled={!context.modelReasoning}>Response</CTab>
                     <CTab itemKey="model-reasoning" disabled={!context.modelReasoning}>
                       Reasoning
                     </CTab>
