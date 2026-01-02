@@ -6,9 +6,13 @@ import {
   Body,
   Res,
   BadRequestException,
+  UploadedFile,
+  UseInterceptors
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { GoogleDriveService } from './google-drive.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+
 
 @Controller('google-drive')
 export class GoogleDriveController {
@@ -41,20 +45,20 @@ export class GoogleDriveController {
   }
 
   @Put('update')
+  @UseInterceptors(FileInterceptor('file'))
   async updateFile(
     @Query('file') fileIdentifier: string,
-    @Query('mimeType') mimeType: string,
-    @Body() content: Buffer,
+    @UploadedFile() file: Express.Multer.File,
   ): Promise<{ message: string }> {
     if (!fileIdentifier) {
       throw new BadRequestException('File parameter is required');
     }
 
-    if (!content || content.length === 0) {
+    if (!file) {
       throw new BadRequestException('File content is required');
     }
 
-    await this.googleDriveService.updateFile(fileIdentifier, content, mimeType);
+    await this.googleDriveService.updateFile(fileIdentifier, file.buffer, file.mimetype);
 
     return { message: 'File updated successfully' };
   }

@@ -16,7 +16,6 @@ import { JwtService } from '@nestjs/jwt';
     origin: '*',
     credentials: true,
   },
-  namespace: '/llm',
 })
 export class LlmGateway {
   @WebSocketServer()

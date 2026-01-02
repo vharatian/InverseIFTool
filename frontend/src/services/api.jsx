@@ -263,11 +263,10 @@ export const googleDriveApi = {
   updateFile: (file, content, mimeType) => {
     const formData = new FormData()
     console.log("content is", content)
-    formData.append('content', content)
-    formData.append('value', "hello")
+    formData.append('file', content)
 
     return api.put('/google-drive/update', formData, {
-      params: { file, mimeType },
+      params: { file },
       headers: {
         'Content-Type': 'multipart/form-data',
       },

@@ -12,7 +12,7 @@ export const SocketProvider = ({ children, token }) => {
       // Create persistent socket connection
       // Use explicit backend URL for WebSocket connection
 
-      const socket = io('/llm', {
+      const socket = io('/', {
         path: '/socket.io',
         transports: ['websocket'],
         auth: { token },
