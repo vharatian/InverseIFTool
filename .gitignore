@@ -136,5 +136,6 @@ backend/sessions/
 *.pid
 *.seed
 
+data/
 # Turbo logs (already covered by logs pattern above)
 # .turbo/ is already ignored above
