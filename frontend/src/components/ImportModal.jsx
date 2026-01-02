@@ -64,7 +64,9 @@ const ImportModal = ({ visible, onClose, onImportData }) => {
       let _notebookJson
 
       if (activeTab === 'file' && selectedFile) {
+        console.log("selected file", selectedFile)
         _notebookJson = await parseNotebook(selectedFile)
+        console.log("selected file parsed", _notebookJson)
       } else if (activeTab === 'url' && urlInput.trim()) {
         // For URL, we'll need to implement download logic
         // For now, show a message that URL import is not implemented
@@ -74,9 +76,13 @@ const ImportModal = ({ visible, onClose, onImportData }) => {
         throw new Error('Please provide input based on selected tab')
       }
 
+      console.log("file text successfully fetch")
+
       setNotebookJson(_notebookJson)
       // Extract form data
-      const result = extractFormData(notebookJson)
+      const result = extractFormData(_notebookJson)
+
+      console.log("result extracted", result)
 
       if (result.success) {
         setParsedData(result.data)
